@@ -2,6 +2,7 @@ use std::net::SocketAddr;
 
 use axum::{routing, response::{IntoResponse, Redirect}};
 
+mod db;
 
 #[tokio::main]
 async fn main() {
@@ -12,7 +13,7 @@ async fn main() {
         .route("/", routing::get(test));
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
-    println!("listening on {}", addr);
+    tracing::info!("listening on {}", addr);
 
     axum::Server::bind(&addr)
         .serve(app.into_make_service())
@@ -22,7 +23,9 @@ async fn main() {
 }
 
 async fn test() -> impl IntoResponse {
+    db::get_db_path();
     "Welcome to cli-shortener!"
     
     // Redirect::permanent("https://www.google.com")
+
 }
