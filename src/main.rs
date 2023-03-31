@@ -3,9 +3,10 @@ use std::net::SocketAddr;
 use axum::{routing, response::{IntoResponse, Redirect}};
 
 
-
 #[tokio::main]
 async fn main() {
+
+    tracing_subscriber::fmt::init();
 
     let app = axum::Router::new()
         .route("/", routing::get(test));
@@ -21,7 +22,7 @@ async fn main() {
 }
 
 async fn test() -> impl IntoResponse {
-    // "Welcome to cli-shortener!"
+    "Welcome to cli-shortener!"
     
-    Redirect::permanent("https://www.google.com")
+    // Redirect::permanent("https://www.google.com")
 }
