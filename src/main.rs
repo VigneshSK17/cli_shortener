@@ -1,6 +1,6 @@
 use std::net::SocketAddr;
 
-use axum::routing;
+use axum::{routing, response::{IntoResponse, Redirect}};
 
 
 
@@ -20,6 +20,8 @@ async fn main() {
 
 }
 
-async fn test() -> &'static str {
-    "Welcome to cli-shortener!"
+async fn test() -> impl IntoResponse {
+    // "Welcome to cli-shortener!"
+    
+    Redirect::permanent("https://www.google.com")
 }
