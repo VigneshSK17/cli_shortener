@@ -27,7 +27,7 @@ async fn main() {
 
 
     let app = axum::Router::new()
-        .route("/", routing::get(test))
+        .route("/", routing::get(test_db))
         .with_state(pool);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
@@ -52,12 +52,10 @@ async fn test_db(
     State(pool): State<SqlitePool>
 ) -> impl IntoResponse {
 
-    sqlx::query("INSERT INTO links (link, hash) values ($1, $2)")
-        .bind("abc")
-        .bind("def")
-        .execute(&pool)
-        .await
-        .unwrap();
+    match db::add_link(&pool, "hij", "klm").await {
+        Ok(_) => tracing::info!("Created link http://localhost:8080/{} for link {}", "klm", "hij"),
+        Err(_) => tracing::error!("Could not create shortened link for {}", "hij")
+    }
 
     "Hi"
 }

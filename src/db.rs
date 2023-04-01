@@ -22,23 +22,6 @@ pub fn get_db_path() -> (PathBuf, String) {
 
 }
 
-// pub async fn create_db(path: &PathBuf) {
-//
-//     let path_str = path.to_string_lossy();
-//
-//     if !Sqlite::database_exists(&path_str).await.unwrap_or(false) {
-//
-//         Sqlite::create_database(&path_str).await
-//             .expect("Could not create database to store links");
-//
-//         create_schema(&path_str).await;
-//
-//     }
-//
-//     tracing::info!("Database already exists at {}", path_str);
-//
-// } 
-
 pub async fn create_schema(pool: &SqlitePool) {
 
     sqlx::query(r#"
@@ -51,5 +34,17 @@ pub async fn create_schema(pool: &SqlitePool) {
         .await
         .expect("Could not create table inside database");
 
+
+}
+
+pub async fn add_link(pool: &SqlitePool, link: &str, hash: &str) -> Result<(), sqlx::Error> {
+
+    sqlx::query("INSERT INTO links (link, hash) values ($1, $2)")
+        .bind(link)
+        .bind(hash)
+        .execute(pool)
+        .await?;
+
+    Ok(())
 
 }
