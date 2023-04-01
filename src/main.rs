@@ -52,5 +52,12 @@ async fn test_db(
     State(pool): State<SqlitePool>
 ) -> impl IntoResponse {
 
+    sqlx::query("INSERT INTO links (link, hash) values ($1, $2)")
+        .bind("abc")
+        .bind("def")
+        .execute(&pool)
+        .await
+        .unwrap();
+
     "Hi"
 }
