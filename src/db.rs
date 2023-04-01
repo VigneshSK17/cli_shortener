@@ -1,6 +1,6 @@
 use std::{fs::File, path::PathBuf, env};
 
-use sqlx::SqlitePool;
+use sqlx::{Row, SqlitePool};
 
 
 pub fn get_db_path() -> (PathBuf, String) {
@@ -47,4 +47,14 @@ pub async fn add_link(pool: &SqlitePool, link: &str, hash: &str) -> Result<(), s
 
     Ok(())
 
+}
+
+pub async fn get_link(pool: &SqlitePool, hash: &str) -> Result<String, sqlx::Error> {
+
+    let row = sqlx::query("SELECT link from links WHERE hash = $1")
+        .bind(hash)
+        .fetch_one(pool)
+        .await?;
+
+    Ok(row.get("link"))
 }

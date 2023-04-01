@@ -3,6 +3,7 @@ use std::{net::SocketAddr, time::Duration};
 use axum::{routing, response::{IntoResponse, Redirect}, extract::State};
 use sqlx::{SqlitePool, sqlite::SqlitePoolOptions};
 
+mod controller;
 mod db;
 mod utils;
 
@@ -28,6 +29,7 @@ async fn main() {
 
     let app = axum::Router::new()
         .route("/", routing::get(test_db))
+        .route("/:hash", routing::get(controller::open_link))
         .with_state(pool);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
@@ -52,7 +54,7 @@ async fn test_db(
     State(pool): State<SqlitePool>
 ) -> impl IntoResponse {
 
-    match db::add_link(&pool, "hij", "klm").await {
+    match db::add_link(&pool, "https://www.google.com", "gg").await {
         Ok(_) => tracing::info!("Created link http://localhost:8080/{} for link {}", "klm", "hij"),
         Err(_) => tracing::error!("Could not create shortened link for {}", "hij")
     }
