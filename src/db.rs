@@ -51,7 +51,5 @@ pub async fn create_schema(pool: &SqlitePool) {
         .await
         .expect("Could not create table inside database");
 
-    // tracing::info!("Initialized database at {}");
-
 
 }

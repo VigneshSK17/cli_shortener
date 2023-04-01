@@ -4,6 +4,7 @@ use axum::{routing, response::{IntoResponse, Redirect}, extract::State};
 use sqlx::{SqlitePool, sqlite::SqlitePoolOptions};
 
 mod db;
+mod utils;
 
 #[tokio::main]
 async fn main() {
@@ -26,7 +27,7 @@ async fn main() {
 
 
     let app = axum::Router::new()
-        .route("/", routing::get(test_db))
+        .route("/", routing::get(test))
         .with_state(pool);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
@@ -40,12 +41,11 @@ async fn main() {
 }
 
 async fn test() -> impl IntoResponse {
-    let path = db::get_db_path();
-
-    "Welcome to cli-shortener!"
+    // "Welcome to cli-shortener!"
     
     // Redirect::permanent("https://www.google.com")
 
+    utils::gen_hash()
 }
 
 async fn test_db(
