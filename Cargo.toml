@@ -9,7 +9,7 @@ edition = "2021"
 axum = "0.6.12"
 dirs = "5.0.0"
 serde = { version = "1.0.159", features = ["derive"] }
-sqlx = { version = "0.6.3", features = ["runtime-tokio-rustls", "any", "postgres"] }
+sqlx = { version = "0.6.3", features = ["runtime-tokio-rustls", "any", "postgres", "sqlite"] }
 tokio = { version = "1.27.0", features = ["full"] }
 tower-http = { version = "0.4.0", features = ["cors"] }
 tracing = "0.1.37"
