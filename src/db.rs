@@ -56,3 +56,13 @@ pub async fn get_link(pool: &SqlitePool, hash: &str) -> Result<String, sqlx::Err
 
     Ok(row.get("link"))
 }
+
+pub async fn clear_links(pool: &SqlitePool) -> Result<(), sqlx::Error> {
+
+    sqlx::query("DELETE from links")
+        .execute(pool)
+        .await?;
+
+    Ok(())
+
+}

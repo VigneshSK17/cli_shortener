@@ -2,6 +2,7 @@ use std::{net::SocketAddr, time::Duration};
 
 use axum::{routing, response::{IntoResponse, Redirect}, extract::State};
 use clap::Parser;
+use reqwest::StatusCode;
 use sqlx::{SqlitePool, sqlite::SqlitePoolOptions};
 
 mod args;
@@ -13,6 +14,36 @@ mod utils;
 async fn main() {
 
     let args = args::ClapArgs::parse();
+
+    match args.entity_type {
+        args::EntityType::Clear => {
+            match reqwest::get("http://127.0.0.1:8080/clear").await {
+                Err(_) => println!("The links server has not been started. Use the start command to start the server"),
+                Ok(resp) => {
+                    match resp.status() {
+                        StatusCode::OK => println!("Cleared links"),
+                        _ => println!("Could not clear links")
+                    }
+                }
+            }
+        },
+        args::EntityType::Start => {
+            init().await
+        },
+        args::EntityType::List => {
+            todo!("Use a cli table library")
+        },
+        args::EntityType::New(new_command) => {
+            // db::add_link(, link, hash)
+        },
+        args::EntityType::Delete(delete_command) => {
+            todo!()
+        }
+    }
+
+}
+
+async fn init() {
 
     tracing_subscriber::fmt::init();
 
@@ -33,6 +64,7 @@ async fn main() {
 
     let app = axum::Router::new()
         .route("/", routing::get(test_db))
+        .route("/clear", routing::get(controller::clear_links))
         .route("/:hash", routing::get(controller::open_link))
         .with_state(pool);
 
@@ -43,7 +75,6 @@ async fn main() {
         .serve(app.into_make_service())
         .await
         .unwrap();
-
 }
 
 async fn test() -> impl IntoResponse {
