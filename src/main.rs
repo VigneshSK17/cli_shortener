@@ -1,8 +1,10 @@
 use std::{net::SocketAddr, time::Duration};
 
 use axum::{routing, response::{IntoResponse, Redirect}, extract::State};
+use clap::Parser;
 use sqlx::{SqlitePool, sqlite::SqlitePoolOptions};
 
+mod args;
 mod controller;
 mod db;
 mod utils;
@@ -10,21 +12,23 @@ mod utils;
 #[tokio::main]
 async fn main() {
 
+    let args = args::ClapArgs::parse();
+
     tracing_subscriber::fmt::init();
 
-    let (db_url, db_url_str) = db::get_db_path();
+    let db_url = db::get_db_path();
 
     let pool = SqlitePoolOptions::new()
         .max_connections(5)
         .idle_timeout(Duration::from_secs(3))
-        .connect(&db_url_str)
+        .connect(&db_url)
         .await
         .expect("Could not connect to database");
 
     db::create_schema(&pool)
         .await;
 
-    tracing::info!("Initialized database at {}", db_url_str);
+    tracing::info!("Initialized database at {}", db_url);
 
 
     let app = axum::Router::new()

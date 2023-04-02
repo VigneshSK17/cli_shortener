@@ -1,9 +1,9 @@
-use std::{fs::File, path::PathBuf, env};
+use std::{fs::File, env};
 
 use sqlx::{Row, SqlitePool};
 
 
-pub fn get_db_path() -> (PathBuf, String) {
+pub fn get_db_path() -> String {
 
     let mut path = dirs::data_local_dir()
         .unwrap_or(env::current_dir().expect("Could not find a directory to store links"));
@@ -16,9 +16,7 @@ pub fn get_db_path() -> (PathBuf, String) {
 
     tracing::info!("{:?}", path);
 
-    let path_str = path.to_string_lossy().into_owned();
-
-    (path, path_str)
+    path.to_string_lossy().into_owned()
 
 }
 
