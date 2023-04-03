@@ -1,8 +1,7 @@
-use axum::{response::{IntoResponse, Redirect}, extract::{Path, State}, http::StatusCode};
+use axum::{response::{IntoResponse, Redirect}, extract::{Path, State, self}, http::StatusCode};
 use sqlx::SqlitePool;
 
-use crate::db;
-
+use crate::{db, utils};
 
 pub async fn open_link(
     State(pool): State<SqlitePool>,
@@ -12,6 +11,22 @@ pub async fn open_link(
     match db::get_link(&pool, &hash).await {
         Ok(link) => Redirect::temporary(&link).into_response(),
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Could not get link for given shortcut").into_response()
+    }
+
+}
+
+pub async fn create_new_link(
+    State(pool): State<SqlitePool>,
+    extract::Json(create_link): extract::Json<utils::CreateLink>
+) -> impl IntoResponse {
+
+    let link = create_link.link;
+    let hash = utils::gen_hash();
+
+    if let Err(_) = db::add_link(&pool, &link, &hash).await {
+        (StatusCode::INTERNAL_SERVER_ERROR, "Could not create shortcut for given link").into_response()
+    } else {
+        format!("http://localhost:8080/{}", hash).into_response()
     }
 
 }

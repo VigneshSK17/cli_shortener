@@ -4,6 +4,7 @@ use axum::{routing, response::{IntoResponse, Redirect}, extract::State};
 use clap::Parser;
 use reqwest::StatusCode;
 use sqlx::{SqlitePool, sqlite::SqlitePoolOptions};
+use utils::CreateLink;
 
 mod args;
 mod controller;
@@ -34,7 +35,24 @@ async fn main() {
             todo!("Use a cli table library")
         },
         args::EntityType::New(new_command) => {
-            // db::add_link(, link, hash)
+            // TODO: Add https:// if not in link
+            let client = reqwest::Client::new();
+            let create_link = CreateLink { link: new_command.link };
+
+            match client.post("http://127.0.0.1:8080/")
+                .json(&create_link)
+                .send().await {
+                Err(_) => println!("The links server has not been started. Use the start command to start the server"),
+                Ok(resp) => {
+                    match resp.status() {
+                        StatusCode::OK => {
+                            let hashed_link = resp.text().await.unwrap();
+                            println!("{}", hashed_link)
+                        },
+                        _ => println!("Could not create shortcut to link")
+                    }
+                }
+            }
         },
         args::EntityType::Delete(delete_command) => {
             todo!()
@@ -64,6 +82,7 @@ async fn init() {
 
     let app = axum::Router::new()
         .route("/", routing::get(test_db))
+        .route("/", routing::post(controller::create_new_link))
         .route("/clear", routing::get(controller::clear_links))
         .route("/:hash", routing::get(controller::open_link))
         .with_state(pool);
