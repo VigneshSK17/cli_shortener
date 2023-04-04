@@ -23,10 +23,21 @@ pub async fn create_new_link(
     let link = create_link.link;
     let hash = utils::gen_hash();
 
-    if let Err(_) = db::add_link(&pool, &link, &hash).await {
-        (StatusCode::INTERNAL_SERVER_ERROR, "Could not create shortcut for given link").into_response()
-    } else {
-        format!("http://localhost:8080/{}", hash).into_response()
+    match db::add_link(&pool, &link, &hash).await {
+        Ok(_) => format!("http://localhost:8080/{}", hash).into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Could not create shortcut for given link").into_response()
+    }
+
+}
+
+pub async fn delete_link(
+    State(pool): State<SqlitePool>,
+    Path(hash): Path<String>
+) -> impl IntoResponse {
+
+    match db::delete_link(&pool, &hash).await {
+        Ok(_) => StatusCode::NO_CONTENT.into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Could not delete shortcut").into_response()
     }
 
 }

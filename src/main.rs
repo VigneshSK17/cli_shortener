@@ -55,7 +55,19 @@ async fn main() {
             }
         },
         args::EntityType::Delete(delete_command) => {
-            todo!()
+            let client = reqwest::Client::new();
+            let hash = delete_command.link.split("/").last().unwrap();
+
+            match client.delete(format!("http://127.0.0.1:8080/{}", hash))
+                .send().await {
+                Err(_) => println!("The links server has not been started. Use the start command to start the server"),
+                Ok(resp) => {
+                    match resp.status() {
+                        StatusCode::NO_CONTENT => println!("Deleted shortcut to link"),
+                        _ => println!("Could not delete given shortcut link")
+                    }
+                }
+            }
         }
     }
 
@@ -85,6 +97,7 @@ async fn init() {
         .route("/", routing::post(controller::create_new_link))
         .route("/clear", routing::get(controller::clear_links))
         .route("/:hash", routing::get(controller::open_link))
+        .route("/:hash", routing::delete(controller::delete_link))
         .with_state(pool);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
