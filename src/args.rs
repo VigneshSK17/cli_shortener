@@ -19,6 +19,7 @@ pub enum EntityType {
     Clear,
     /// Lists all active shortened links
     List,
+    /// Starts the web server which redirects the shortened links
     Start,
 }
 
