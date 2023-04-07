@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 axum = "0.6.12"
 clap = { version = "4.2.1", features = ["derive"] }
+cli-table = "0.4.7"
 dirs = "5.0.0"
 random_word = "0.3.0"
 reqwest = { version = "0.11.16", features = ["tokio-rustls", "json"] }
