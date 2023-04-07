@@ -42,19 +42,24 @@ async fn main() {
                 if resp.status() == StatusCode::OK {
                     if let Ok(shortcuts) = resp.json::<Vec<Shortcut>>().await {
 
-                        let shortcuts_iter = shortcuts.into_iter();
+                        if shortcuts.len() != 0 {
+                            let shortcuts_iter = shortcuts.into_iter();
 
-                        let table = shortcuts_iter.map(|s| {
-                            vec![s.link.cell(), s.hashed_link.cell()]
-                        })
-                        .collect::<Vec<Vec<CellStruct>>>()
-                        .table()
-                        .title(vec!["Original Link".cell().bold(true), "Shortcut Link".cell().bold(true)])
-                        .bold(true);
+                            let table = shortcuts_iter.map(|s| {
+                                vec![s.link.cell(), s.hashed_link.cell()]
+                            })
+                            .collect::<Vec<Vec<CellStruct>>>()
+                            .table()
+                            .title(vec!["Original Link".cell().bold(true), "Shortcut Link".cell().bold(true)])
+                            .bold(true);
 
-                        if print_stdout(table).is_err() {
-                            println!("\nCould not show all shortcut links\n")
+                            if print_stdout(table).is_err() {
+                                println!("\nCould not show all shortcut links\n")
+                            }
+                        } else {
+                            println!("\nNo shortcuts have been created yet. Use the new command to create a new link\n")
                         }
+
 
                     } else {
                         println!("\nNo links could be found\n")
@@ -70,20 +75,25 @@ async fn main() {
             let client = reqwest::Client::new();
             let create_link = CreateLink { link: new_command.link };
 
-            match client.post("http://127.0.0.1:8080/")
-                .json(&create_link)
-                .send().await {
-                Err(_) => println!("\nThe links server has not been started. Use the start command to start the server\n"),
-                Ok(resp) => {
-                    match resp.status() {
-                        StatusCode::OK => {
-                            let hashed_link = resp.text().await.unwrap();
-                            println!("{}", hashed_link)
-                        },
-                        _ => println!("\nCould not create shortcut to link\n")
+            if utils::is_url(&create_link.link) {
+                match client.post("http://127.0.0.1:8080/")
+                    .json(&create_link)
+                    .send().await {
+                    Err(_) => println!("\nThe links server has not been started. Use the start command to start the server\n"),
+                    Ok(resp) => {
+                        match resp.status() {
+                            StatusCode::OK => {
+                                let hashed_link = resp.text().await.unwrap();
+                                println!("\n{} --> {}\n", hashed_link, create_link.link)
+                            },
+                            _ => println!("\nCould not create shortcut to link\n")
+                        }
                     }
                 }
+            } else {
+                println!("\nThe link given is not valid. Make sure to provide the full link address.\n")
             }
+
         },
         args::EntityType::Delete(delete_command) => {
             let client = reqwest::Client::new();

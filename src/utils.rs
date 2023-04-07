@@ -8,6 +8,12 @@ pub fn gen_hash() -> String {
     )
 }
 
+pub fn is_url(url: &str) -> bool {
+    const REGEX: &str = r"https?://(www\.)?[-a-zA-Z0-9@:%._\+~#=]{2,256}\.[a-z]{2,4}\b([-a-zA-Z0-9@:%_\+.~#?&//=]*)";
+
+    regex::Regex::new(REGEX).unwrap().is_match(url)
+}
+
 #[derive(Deserialize, Serialize)]
 pub struct CreateLink {
     pub link: String,
