@@ -114,7 +114,7 @@ async fn main() {
 
 }
 
-async fn init() {
+pub async fn init() {
 
     tracing_subscriber::fmt()
         // TODO: Make it so that if -v then enable
@@ -163,6 +163,7 @@ async fn init() {
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
     tracing::debug!("listening on {}", addr);
+    println!("Started on {}", addr);
 
     if axum::Server::bind(&addr)
         .serve(app.into_make_service())
