@@ -1,22 +1,33 @@
-use std::{env, fs::File};
+use std::fs::File;
 
 use sqlx::{Row, SqlitePool};
+use thiserror::Error;
 
-pub fn get_db_path() -> Result<String, String> {
+#[derive(Error, Debug)]
+pub enum DbPathError {
+    #[error("directory not found")]
+    DataDirError(),
+
+    #[error("database not created")]
+    DbFileCreationError(#[from] std::io::Error),
+
+}
+
+/// Grabs path for links database, creates if necessary
+pub fn get_db_path() -> Result<String, DbPathError> {
     let mut path = dirs::data_local_dir()
-        .unwrap_or_else(|| env::current_dir().expect("Could not find a directory to store links"));
+        .ok_or(DbPathError::DataDirError())?;
 
     path.push("cli_shortener/links.db");
 
-    if !path.is_file() && File::create(&path).is_err() {
-        return Err("Could not create database to store links".to_string());
+    if !path.is_file() {
+        File::create(&path)?;
     }
-
-    tracing::debug!("{:?}", path);
 
     Ok(path.to_string_lossy().to_string())
 }
 
+/// Genreates schema for creating new links db
 pub async fn create_schema(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     sqlx::query(
         r#"
@@ -32,6 +43,7 @@ pub async fn create_schema(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     Ok(())
 }
 
+/// Add link with generated hash to links db
 pub async fn add_link(pool: &SqlitePool, link: &str, hash: &str) -> Result<(), sqlx::Error> {
     sqlx::query("INSERT INTO links (link, hash) values ($1, $2)")
         .bind(link)
@@ -42,6 +54,7 @@ pub async fn add_link(pool: &SqlitePool, link: &str, hash: &str) -> Result<(), s
     Ok(())
 }
 
+/// Get the given hash's link from links db
 pub async fn get_link(pool: &SqlitePool, hash: &str) -> Result<String, sqlx::Error> {
     let row = sqlx::query("SELECT link from links WHERE hash = $1")
         .bind(hash)
@@ -51,6 +64,7 @@ pub async fn get_link(pool: &SqlitePool, hash: &str) -> Result<String, sqlx::Err
     Ok(row.get("link"))
 }
 
+/// Get all links from links db
 pub async fn get_all_links(pool: &SqlitePool) -> Result<Vec<(String, String)>, sqlx::Error> {
     let rows = sqlx::query("SELECT * from links").fetch_all(pool).await?;
 
@@ -62,15 +76,22 @@ pub async fn get_all_links(pool: &SqlitePool) -> Result<Vec<(String, String)>, s
     Ok(links)
 }
 
+/// Deletes the given hash's link from links db
 pub async fn delete_link(pool: &SqlitePool, hash: &str) -> Result<(), sqlx::Error> {
-    sqlx::query("DELETE from links WHERE hash = $1")
+    let result = sqlx::query("DELETE from links WHERE hash = $1")
         .bind(hash)
         .execute(pool)
         .await?;
 
-    Ok(())
+    if result.rows_affected() == 0 {
+        Err(sqlx::Error::ColumnNotFound(format!("Column {hash} not found")))
+    } else {
+        Ok(())
+    }
+
 }
 
+/// Clears all links from links db
 pub async fn clear_links(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     sqlx::query("DELETE from links").execute(pool).await?;
 

@@ -1,6 +1,7 @@
-use std::{net::SocketAddr, time::Duration, str::FromStr};
+use std::{net::SocketAddr, str::FromStr, time::Duration};
 
-use axum::{routing, response::{IntoResponse}};
+use args::ClapArgs;
+use axum::{routing, response::IntoResponse};
 use clap::Parser;
 use cli_table::{Cell, CellStruct, Table, Style, print_stdout};
 use reqwest::StatusCode;
@@ -12,9 +13,6 @@ mod controller;
 mod db;
 mod utils;
 
-// TODO: Fix all unwraps
-// TODO: Log everything
-
 #[tokio::main]
 async fn main() {
 
@@ -23,17 +21,17 @@ async fn main() {
     match args.entity_type {
         args::EntityType::Clear => {
             match reqwest::get("http://127.0.0.1:8080/clear").await {
-                Err(_) => println!("\nThe links server has not been started. Use the start command to start the server\n"),
+                Err(_) => println!("\nThe links server has not been started. Use the start command to start the server"),
                 Ok(resp) => {
                     match resp.status() {
-                        StatusCode::OK => println!("\nCleared links\n"),
-                        _ => println!("\nCould not clear links\n")
+                        StatusCode::OK => println!("\nCleared links"),
+                        _ => println!("\nCould not clear links")
                     }
                 }
             }
         },
         args::EntityType::Start => {
-            init().await;
+            init(args).await;
         },
         args::EntityType::List => {
 
@@ -42,7 +40,7 @@ async fn main() {
                 if resp.status() == StatusCode::OK {
                     if let Ok(shortcuts) = resp.json::<Vec<Shortcut>>().await {
 
-                        if shortcuts.len() != 0 {
+                        if !shortcuts.is_empty() {
                             let shortcuts_iter = shortcuts.into_iter();
 
                             let table = shortcuts_iter.map(|s| {
@@ -54,24 +52,23 @@ async fn main() {
                             .bold(true);
 
                             if print_stdout(table).is_err() {
-                                println!("\nCould not show all shortcut links\n")
+                                println!("\nCould not show all shortcut links")
                             }
                         } else {
-                            println!("\nNo shortcuts have been created yet. Use the new command to create a new link\n")
+                            println!("\nNo shortcuts have been created yet. Use the new command to create a new link")
                         }
 
 
                     } else {
-                        println!("\nNo links could be found\n")
+                        println!("\nNo links could be found")
                     }
                 }
 
             } else {
-                println!("\nThe links server has not been started. Use the start command to start the server\n");
+                println!("\nThe links server has not been started. Use the start command to start the server");
             }
         },
         args::EntityType::New(new_command) => {
-            // TODO: Add https:// if not in link
             let client = reqwest::Client::new();
             let create_link = CreateLink { link: new_command.link };
 
@@ -79,19 +76,19 @@ async fn main() {
                 match client.post("http://127.0.0.1:8080/")
                     .json(&create_link)
                     .send().await {
-                    Err(_) => println!("\nThe links server has not been started. Use the start command to start the server\n"),
+                    Err(_) => println!("\nThe links server has not been started. Use the start command to start the server"),
                     Ok(resp) => {
                         match resp.status() {
                             StatusCode::OK => {
                                 let hashed_link = resp.text().await.unwrap();
-                                println!("\n{} --> {}\n", hashed_link, create_link.link)
+                                println!("\n{} --> {}", hashed_link, create_link.link)
                             },
-                            _ => println!("\nCould not create shortcut to link\n")
+                            _ => println!("\nCould not create shortcut to link")
                         }
                     }
                 }
             } else {
-                println!("\nThe link given is not valid. Make sure to provide the full link address.\n")
+                println!("\nThe link given is not valid. Make sure to provide the full link address.")
             }
 
         },
@@ -101,11 +98,11 @@ async fn main() {
 
             match client.delete(format!("http://127.0.0.1:8080/{}", hash))
                 .send().await {
-                Err(_) => println!("\nThe links server has not been started. Use the start command to start the server\n"),
+                Err(_) => println!("\nThe links server has not been started. Use the start command to start the server"),
                 Ok(resp) => {
                     match resp.status() {
-                        StatusCode::NO_CONTENT => println!("\nDeleted shortcut to link\n"),
-                        _ => println!("\nCould not delete given shortcut link\n")
+                        StatusCode::NO_CONTENT => println!("\nDeleted shortcut to link"),
+                        _ => println!("\nCould not delete given shortcut link")
                     }
                 }
             }
@@ -114,22 +111,27 @@ async fn main() {
 
 }
 
-pub async fn init() {
-
-    tracing_subscriber::fmt()
-        // TODO: Make it so that if -v then enable
-        // .with_max_level(tracing::Level::DEBUG)
-        .init();
+pub async fn init(args: ClapArgs) {
 
     let db_url = match db::get_db_path() {
         Ok(s) => s,
         Err(e) => {
-            println!("\n{e}\n");
+            println!("\n{:#?}", e.to_string());
             std::process::exit(1);
         }
     };
+
+
+    tracing_subscriber::fmt()
+        .with_max_level(
+            if args.verbose { tracing::Level::DEBUG } else { tracing::Level::INFO }
+        )
+        .compact()
+        .init();
+
     let options = SqliteConnectOptions::from_str(&db_url).unwrap()
         .log_statements(tracing::log::LevelFilter::Debug).clone();
+
 
     let pool = match SqlitePoolOptions::new()
         .max_connections(5)
@@ -139,14 +141,14 @@ pub async fn init() {
 
         Ok(p) => p,
         Err(_) => {
-            println!("\nCould not connect to database\n");
+            println!("\nCould not connect to database");
             std::process::exit(1);
         }
 
     };
 
     if db::create_schema(&pool).await.is_err() {
-        println!("\nCould not create table inside database\n")
+        println!("\nCould not create table inside database")
     }
 
     tracing::debug!("Initialized database at {}", db_url);
@@ -161,15 +163,24 @@ pub async fn init() {
         .route("/:hash", routing::delete(controller::delete_link))
         .with_state(pool);
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
-    tracing::debug!("listening on {}", addr);
-    println!("Started on {}", addr);
 
-    if axum::Server::bind(&addr)
-        .serve(app.into_make_service())
-        .await.is_err() {
-        println!("\nCheck if your local port 8080 is open\n")
+    let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
+
+    let binding = axum::Server::try_bind(&addr);
+    match binding {
+        Err(_) => tracing::error!("Cannot attach server to port 8080"),
+        Ok(b) => {
+            let server = b.serve(app.into_make_service());
+            let local_addr = server.local_addr();
+
+            tracing::info!("Started on: http://localhost:{}", local_addr.port());
+            if server.await.is_err() {
+                tracing::error!("Check if your local ports are open")
+            }
+        }
+
     }
+
 
 
 }

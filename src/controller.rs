@@ -12,12 +12,15 @@ pub async fn open_link(
     Path(hash): Path<String>,
 ) -> impl IntoResponse {
     match db::get_link(&pool, &hash).await {
-        Ok(link) => Redirect::temporary(&link).into_response(),
-        Err(_) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Could not get link for given shortcut",
-        )
-            .into_response(),
+        Ok(link) => {
+            tracing::info!("Redirected http://localhost:8080/{} to {}", hash, link);
+            Redirect::temporary(&link).into_response()
+        },
+        Err(_) => {
+            tracing::error!("Could not get redirect for shortcut http://localhost:8080/{}", hash);
+            (StatusCode::INTERNAL_SERVER_ERROR, "Could not get original link for given shortcut")
+                .into_response()
+        }
     }
 }
 
@@ -29,22 +32,25 @@ pub async fn create_new_link(
     let hash = utils::gen_hash();
 
     match db::add_link(&pool, &link, &hash).await {
-        Ok(_) => format!("http://localhost:8080/{}", hash).into_response(),
-        Err(_) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Could not create shortcut for given link",
-        )
-            .into_response(),
+        Ok(_) => {
+            tracing::info!("Created shortcut http://localhost:8080/{}", hash);
+            format!("http://localhost:8080/{}", hash).into_response()
+        }
+        Err(_) => {
+            tracing::error!("Could not create shortcut http://localhost:8080/{} from {}", hash, link);
+            (StatusCode::INTERNAL_SERVER_ERROR, "Could not create shortcut for given link")
+                .into_response()
+        }
     }
 }
 
 pub async fn get_all_links(State(pool): State<SqlitePool>) -> impl IntoResponse {
     match db::get_all_links(&pool).await {
-        Err(_) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Could not access all shortcuts",
-        )
-            .into_response(),
+        Err(_) => {
+            tracing::error!("Could not access shortcuts");
+            (StatusCode::INTERNAL_SERVER_ERROR, "Could not access all shortcuts")
+                .into_response()
+        },
         Ok(links) => {
             let shortcuts: Vec<utils::Shortcut> = links
                 .iter()
@@ -53,6 +59,8 @@ pub async fn get_all_links(State(pool): State<SqlitePool>) -> impl IntoResponse 
                     hashed_link: format!("http://localhost:8080/{}", hash),
                 })
                 .collect();
+
+            tracing::info!("Collected all shortcuts");
 
             axum::Json(shortcuts).into_response()
         }
@@ -64,18 +72,27 @@ pub async fn delete_link(
     Path(hash): Path<String>,
 ) -> impl IntoResponse {
     match db::delete_link(&pool, &hash).await {
-        Ok(_) => StatusCode::NO_CONTENT.into_response(),
-        Err(_) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Could not delete shortcut",
-        )
-            .into_response(),
+        Ok(_) => {
+            tracing::info!("Deleted http://localhost:8080/{}", hash);
+            StatusCode::NO_CONTENT.into_response()
+        }
+        Err(_) => {
+            tracing::error!("Could not delete http://localhost:8080/{}", hash);
+            (StatusCode::INTERNAL_SERVER_ERROR, "Could not delete shortcut")
+                .into_response()
+        }
     }
 }
 
 pub async fn clear_links(State(pool): State<SqlitePool>) -> impl IntoResponse {
     match db::clear_links(&pool).await {
-        Ok(_) => StatusCode::OK.into_response(),
-        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Could not clear links").into_response(),
+        Ok(_) => {
+            tracing::info!("Cleared shortcuts");
+            StatusCode::OK.into_response()
+        },
+        Err(_) => {
+            tracing::error!("Could not clear shortcuts");
+            (StatusCode::INTERNAL_SERVER_ERROR, "Could not clear shortcuts").into_response()
+        }
     }
 }
