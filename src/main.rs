@@ -1,11 +1,11 @@
-use std::{net::SocketAddr, str::FromStr, time::Duration};
+use std::{net::SocketAddr, time::Duration};
 
 use args::ClapArgs;
 use axum::{routing, response::IntoResponse};
 use clap::Parser;
 use cli_table::{Cell, CellStruct, Table, Style, print_stdout};
+use dotenv::dotenv;
 use reqwest::StatusCode;
-use sqlx::{sqlite::{SqlitePoolOptions, SqliteConnectOptions}, ConnectOptions};
 use utils::{CreateLink, Shortcut};
 
 mod args;
@@ -113,14 +113,8 @@ async fn main() {
 
 pub async fn init(args: ClapArgs) {
 
-    let db_url = match db::get_db_path() {
-        Ok(s) => s,
-        Err(e) => {
-            println!("\n{:#?}", e.to_string());
-            std::process::exit(1);
-        }
-    };
-
+    dotenv().ok();
+    let db_client = db::init_db_client().await;
 
     tracing_subscriber::fmt()
         .with_max_level(
@@ -129,6 +123,7 @@ pub async fn init(args: ClapArgs) {
         .compact()
         .init();
 
+    /*
     let options = SqliteConnectOptions::from_str(&db_url).unwrap()
         .log_statements(tracing::log::LevelFilter::Debug).clone();
 
@@ -180,6 +175,7 @@ pub async fn init(args: ClapArgs) {
         }
 
     }
+    */
 
 
 

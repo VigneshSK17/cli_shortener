@@ -3,10 +3,10 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Redirect},
 };
-use sqlx::SqlitePool;
 
 use crate::{db, utils};
 
+/*
 pub async fn open_link(
     State(pool): State<SqlitePool>,
     Path(hash): Path<String>,
@@ -96,3 +96,4 @@ pub async fn clear_links(State(pool): State<SqlitePool>) -> impl IntoResponse {
         }
     }
 }
+*/
