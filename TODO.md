@@ -6,11 +6,11 @@ A place for me to drop ideas for this project to be done later
 
 ### Todo
 
+- [ ] Switch from SQLx to DynamoDB
+- [ ] Add unit and integration tests
+- [ ] Integrate into DigitalOcean VPS
+- [ ] Create frontend for the server
 - [ ] Add "https://" if not in link
-
-### In Progress
-
-
 
 ### Completed
 - [x] Provide clean message when port is already in use
