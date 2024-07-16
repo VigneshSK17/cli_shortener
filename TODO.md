@@ -6,11 +6,12 @@ A place for me to drop ideas for this project to be done later
 
 ### Todo
 
+- [ ] Switch from SQLx to SeaORM (allowing for SQLite and PostgreSQL interop)
+- [ ] Add unit and integration tests
+- [ ] Spin up EC2 instance with this project, setting up PostgreSQL
+- [ ] Create frontend for the server
+- [ ] Implement DNS
 - [ ] Add "https://" if not in link
-
-### In Progress
-
-
 
 ### Completed
 - [x] Provide clean message when port is already in use
