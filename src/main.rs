@@ -1,9 +1,10 @@
-use std::{net::SocketAddr, time::Duration};
+use std::{env, net::SocketAddr, time::Duration};
 
 use args::ClapArgs;
 use axum::{routing, response::IntoResponse};
 use clap::Parser;
 use cli_table::{Cell, CellStruct, Table, Style, print_stdout};
+use controller::DbState;
 use dotenv::dotenv;
 use reqwest::StatusCode;
 use utils::{CreateLink, Shortcut};
@@ -115,6 +116,7 @@ pub async fn init(args: ClapArgs) {
 
     dotenv().ok();
     let db_client = db::init_db_client().await;
+    let db_table_name = env::var("AWS_TABLE_NAME").unwrap();
 
     tracing_subscriber::fmt()
         .with_max_level(
@@ -123,40 +125,14 @@ pub async fn init(args: ClapArgs) {
         .compact()
         .init();
 
-    /*
-    let options = SqliteConnectOptions::from_str(&db_url).unwrap()
-        .log_statements(tracing::log::LevelFilter::Debug).clone();
-
-
-    let pool = match SqlitePoolOptions::new()
-        .max_connections(5)
-        .idle_timeout(Duration::from_secs(3))
-        .connect_with(options)
-        .await {
-
-        Ok(p) => p,
-        Err(_) => {
-            println!("\nCould not connect to database");
-            std::process::exit(1);
-        }
-
-    };
-
-    if db::create_schema(&pool).await.is_err() {
-        println!("\nCould not create table inside database")
-    }
-
-    tracing::debug!("Initialized database at {}", db_url);
-
-
     let app = axum::Router::new()
-        .route("/", routing::get(test))
-        .route("/", routing::post(controller::create_new_link))
-        .route("/all", routing::get(controller::get_all_links))
-        .route("/clear", routing::get(controller::clear_links))
-        .route("/:hash", routing::get(controller::open_link))
-        .route("/:hash", routing::delete(controller::delete_link))
-        .with_state(pool);
+        .route("/s/", routing::get(test))
+        .route("/s/", routing::post(controller::create_new_shortcut))
+        // .route("/s/all", routing::get(controller::get_all_links))
+        .route("/s/clear", routing::get(controller::clear_shortcuts))
+        .route("/s/:hash", routing::get(controller::open_shortcut))
+        .route("/s/:hash", routing::delete(controller::delete_shortcut))
+        .with_state((db_client, db_table_name));
 
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
@@ -175,7 +151,6 @@ pub async fn init(args: ClapArgs) {
         }
 
     }
-    */
 
 
 
