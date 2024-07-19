@@ -10,6 +10,10 @@ pub struct ClapArgs {
     /// Increase verbosity level to see everything that's going on
     #[clap(short, long, action)]
     pub verbose: bool,
+
+    /// Set the specific port for the web server
+    #[clap(short, long, default_value_t = 8080)]
+    pub port: u16,
 }
 
 #[derive(Debug, Subcommand)]
