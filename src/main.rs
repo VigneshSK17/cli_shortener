@@ -4,7 +4,6 @@ use args::ClapArgs;
 use axum::{routing, response::IntoResponse};
 use clap::Parser;
 use cli_table::{Cell, CellStruct, Table, Style, print_stdout};
-use controller::DbState;
 use dotenv::dotenv;
 use reqwest::StatusCode;
 use utils::{CreateLink, Shortcut};
@@ -125,20 +124,22 @@ pub async fn init(args: ClapArgs) {
         .compact()
         .init();
 
+    // TODO: Store port into state or somewhere like that
+    let addr = SocketAddr::from(([127, 0, 0, 1], args.port));
+
     let app = axum::Router::new()
         .route("/s", routing::get(test))
         .route("/s", routing::post(controller::create_new_shortcut))
-        // .route("/s/all", routing::get(controller::get_all_links))
+        .route("/s/all", routing::get(controller::get_all_shortcuts))
         .route("/s/clear", routing::get(controller::clear_shortcuts))
         .route("/s/:hash", routing::get(controller::open_shortcut))
         .route("/s/:hash", routing::delete(controller::delete_shortcut))
         .with_state((db_client, db_table_name));
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], args.port));
 
     let binding = axum::Server::try_bind(&addr);
     match binding {
-        Err(_) => tracing::error!("Cannot attach server to port 8080"),
+        Err(_) => tracing::error!("Cannot attach server to port {}", args.port),
         Ok(b) => {
             let server = b.serve(app.into_make_service());
             let local_addr = server.local_addr();

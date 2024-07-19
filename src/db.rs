@@ -108,6 +108,27 @@ pub async fn get_shortcut(
     }
 }
 
+pub async fn get_all_shortcuts(
+    client: &Client,
+    table_name: &str,
+) -> Result<Vec<HashMap<String, AttributeValue>>, DbError> {
+    let request = client
+        .scan()
+        .table_name(table_name);
+
+    tracing::debug!("Executing request [{request:?}] to get shortcut from db using hash");
+
+    let response = request
+        .send()
+        .await
+        .map_err(|e| DbError::DbRequestError(e.to_string()))?;
+
+    match response.items {
+        None => Err(DbError::DbRetrievalError("Scan response did not function properly".to_string())),
+        Some(items) => Ok(items)
+    }
+}
+
 /// Deletes the given hash's shortcut from db
 pub async fn delete_shortcut(
     client: &Client,
@@ -127,8 +148,7 @@ pub async fn delete_shortcut(
     let _response = request
         .send()
         .await
-        .unwrap();
-        // .map_err(|e| DbError::DbRequestError(e.to_string()))?;
+        .map_err(|e| DbError::DbRequestError(e.to_string()))?;
 
     tracing::debug!("Deleted link with {hash}");
     Ok(())
