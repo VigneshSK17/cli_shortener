@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 pub fn gen_hash() -> String {
     format!(
@@ -19,8 +20,10 @@ pub struct CreateLink {
     pub link: String,
 }
 
-#[derive(Deserialize, Serialize)]
-pub struct Shortcut {
-    pub link: String,
-    pub hashed_link: String,
+#[derive(Error, Debug)]
+pub enum GetAddrError {
+    #[error("Value not stored in environment variable")]
+    EnvError(#[from] std::env::VarError),
+    #[error("Could not parse value")]
+    ParseError(String),
 }

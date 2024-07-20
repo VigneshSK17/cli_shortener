@@ -1,7 +1,8 @@
 use std::{
     env,
+    fs::File,
+    io::{Read, Write},
     net::{IpAddr, Ipv4Addr, SocketAddr},
-    time::Duration,
 };
 
 use args::ClapArgs;
@@ -10,7 +11,6 @@ use clap::Parser;
 use cli_table::{print_stdout, Cell, CellStruct, Style, Table};
 use dotenv::dotenv;
 use reqwest::StatusCode;
-use utils::{CreateLink, Shortcut};
 
 mod args;
 mod controller;
@@ -21,9 +21,20 @@ mod utils;
 async fn main() {
     let args = args::ClapArgs::parse();
 
+    let local_addr = match matches!(args.entity_type, args::EntityType::Start) {
+        false => match get_local_addr() {
+            Ok(addr) => addr,
+            Err(_) => {
+                println!("Could not get address to access cli_shortener");
+                return;
+            }
+        },
+        true => SocketAddr::from(([127, 0, 0, 1], 0)), // just to initialize the variable
+    };
+
     match args.entity_type {
         args::EntityType::Clear => {
-            match reqwest::get("http://127.0.0.1:8080/clear").await {
+            match reqwest::get(format!("http://{local_addr}/s/clear")).await {
                 Err(_) => println!("\nThe links server has not been started. Use the start command to start the server"),
                 Ok(resp) => {
                     match resp.status() {
@@ -32,27 +43,26 @@ async fn main() {
                     }
                 }
             }
-        },
+        }
         args::EntityType::Start => {
             init(args).await;
-        },
+        }
         args::EntityType::List => {
-
-            if let Ok(resp) = reqwest::get("http://127.0.0.1:8080/all").await {
-
+            if let Ok(resp) = reqwest::get(format!("http://{local_addr}/s/all")).await {
                 if resp.status() == StatusCode::OK {
-                    if let Ok(shortcuts) = resp.json::<Vec<Shortcut>>().await {
-
+                    if let Ok(shortcuts) = resp.json::<Vec<db::Shortcut>>().await {
                         if !shortcuts.is_empty() {
                             let shortcuts_iter = shortcuts.into_iter();
 
-                            let table = shortcuts_iter.map(|s| {
-                                vec![s.link.cell(), s.hashed_link.cell()]
-                            })
-                            .collect::<Vec<Vec<CellStruct>>>()
-                            .table()
-                            .title(vec!["Original Link".cell().bold(true), "Shortcut Link".cell().bold(true)])
-                            .bold(true);
+                            let table = shortcuts_iter
+                                .map(|s| vec![s.link.cell(), s.hash.cell()])
+                                .collect::<Vec<Vec<CellStruct>>>()
+                                .table()
+                                .title(vec![
+                                    "Original Link".cell().bold(true),
+                                    "Shortcut Link".cell().bold(true),
+                                ])
+                                .bold(true);
 
                             if print_stdout(table).is_err() {
                                 println!("\nCould not show all shortcut links")
@@ -60,23 +70,22 @@ async fn main() {
                         } else {
                             println!("\nNo shortcuts have been created yet. Use the new command to create a new link")
                         }
-
-
                     } else {
                         println!("\nNo links could be found")
                     }
                 }
-
             } else {
                 println!("\nThe links server has not been started. Use the start command to start the server");
             }
-        },
+        }
         args::EntityType::New(new_command) => {
             let client = reqwest::Client::new();
-            let create_link = CreateLink { link: new_command.link };
+            let create_link = utils::CreateLink {
+                link: new_command.link,
+            };
 
             if utils::is_url(&create_link.link) {
-                match client.post("http://127.0.0.1:8080/")
+                match client.post(format!("http://{local_addr}/s"))
                     .json(&create_link)
                     .send().await {
                     Err(_) => println!("\nThe links server has not been started. Use the start command to start the server"),
@@ -91,15 +100,16 @@ async fn main() {
                     }
                 }
             } else {
-                println!("\nThe link given is not valid. Make sure to provide the full link address.")
+                println!(
+                    "\nThe link given is not valid. Make sure to provide the full link address."
+                )
             }
-
-        },
+        }
         args::EntityType::Delete(delete_command) => {
             let client = reqwest::Client::new();
             let hash = delete_command.link.split('/').last().unwrap();
 
-            match client.delete(format!("http://127.0.0.1:8080/{}", hash))
+            match client.delete(format!("http://{local_addr}/s/{hash}"))
                 .send().await {
                 Err(_) => println!("\nThe links server has not been started. Use the start command to start the server"),
                 Ok(resp) => {
@@ -127,8 +137,7 @@ pub async fn init(args: ClapArgs) {
         .compact()
         .init();
 
-    // TODO: Store port into terminal to allow for access by other instances
-    let addr = get_addr(args);
+    let addr = gen_addr(args);
 
     let app = axum::Router::new()
         .route("/s", routing::get(test))
@@ -140,15 +149,21 @@ pub async fn init(args: ClapArgs) {
         .with_state((db_client, db_table_name, addr));
 
     let binding = axum::Server::try_bind(&addr);
+
     match binding {
         Err(_) => tracing::error!("Cannot attach server to address {}", addr),
         Ok(b) => {
             let server = b.serve(app.into_make_service());
             let local_addr = server.local_addr();
 
-            tracing::info!("Started on: http://localhost:{}", local_addr.port());
+            tracing::info!("Started on: http://{local_addr}");
+
+            if store_local_addr(&local_addr).is_err() {
+                tracing::error!("Could not store local address of server");
+            }
+
             if server.await.is_err() {
-                tracing::error!("Check if your local ports are open")
+                tracing::error!("Server stopped unexpectedly");
             }
         }
     }
@@ -158,7 +173,7 @@ async fn test() -> impl IntoResponse {
     "Welcome to cli-shortener!"
 }
 
-fn get_addr(args: ClapArgs) -> SocketAddr {
+fn gen_addr(args: ClapArgs) -> SocketAddr {
     let mut addr = SocketAddr::from((
         args.host
             .parse::<IpAddr>()
@@ -178,4 +193,26 @@ fn get_addr(args: ClapArgs) -> SocketAddr {
     std::mem::drop(listener);
 
     addr
+}
+
+fn store_local_addr(addr: &SocketAddr) -> Result<(), std::io::Error> {
+    let mut file = File::create("/tmp/cli_shortener.txt")?;
+    file.write_all(format!("{}\n{}", &addr.ip(), &addr.port()).as_bytes())?;
+    Ok(())
+}
+
+fn get_local_addr() -> Result<SocketAddr, std::io::Error> {
+    let mut file = File::open("/tmp/cli_shortener.txt")?;
+    let mut contents = String::new();
+    file.read_to_string(&mut contents)?;
+    let values = contents.split_whitespace().collect::<Vec<&str>>();
+
+    let host = values[0]
+        .parse::<IpAddr>()
+        .map_err(|_| std::io::Error::last_os_error())?;
+    let port = values[1]
+        .parse::<u16>()
+        .map_err(|_| std::io::Error::last_os_error())?;
+
+    Ok(SocketAddr::from((host, port)))
 }
