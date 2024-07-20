@@ -1,6 +1,5 @@
 use clap::{Args, Parser, Subcommand};
 
-
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 pub struct ClapArgs {
@@ -14,6 +13,10 @@ pub struct ClapArgs {
     /// Set the specific port for the web server
     #[clap(short, long, default_value_t = 8080)]
     pub port: u16,
+
+    /// Set the specific host IP addr
+    #[clap(long, default_value = "127.0.0.1")]
+    pub host: String,
 }
 
 #[derive(Debug, Subcommand)]
@@ -30,7 +33,6 @@ pub enum EntityType {
     List,
     /// Starts the web server which redirects the shortened links
     Start,
-
 }
 
 #[derive(Debug, Args)]

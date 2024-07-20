@@ -1,9 +1,13 @@
-use std::{env, net::SocketAddr, time::Duration};
+use std::{
+    env,
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+    time::Duration,
+};
 
 use args::ClapArgs;
-use axum::{routing, response::IntoResponse};
+use axum::{response::IntoResponse, routing};
 use clap::Parser;
-use cli_table::{Cell, CellStruct, Table, Style, print_stdout};
+use cli_table::{print_stdout, Cell, CellStruct, Style, Table};
 use dotenv::dotenv;
 use reqwest::StatusCode;
 use utils::{CreateLink, Shortcut};
@@ -15,7 +19,6 @@ mod utils;
 
 #[tokio::main]
 async fn main() {
-
     let args = args::ClapArgs::parse();
 
     match args.entity_type {
@@ -108,24 +111,24 @@ async fn main() {
             }
         }
     }
-
 }
 
 pub async fn init(args: ClapArgs) {
-
     dotenv().ok();
     let db_client = db::init_db_client().await;
     let db_table_name = env::var("AWS_TABLE_NAME").unwrap();
 
     tracing_subscriber::fmt()
-        .with_max_level(
-            if args.verbose { tracing::Level::DEBUG } else { tracing::Level::INFO }
-        )
+        .with_max_level(if args.verbose {
+            tracing::Level::DEBUG
+        } else {
+            tracing::Level::INFO
+        })
         .compact()
         .init();
 
-    // TODO: Store port into state or somewhere like that
-    let addr = SocketAddr::from(([127, 0, 0, 1], args.port));
+    // TODO: Store port into terminal to allow for access by other instances
+    let addr = get_addr(args);
 
     let app = axum::Router::new()
         .route("/s", routing::get(test))
@@ -134,12 +137,11 @@ pub async fn init(args: ClapArgs) {
         .route("/s/clear", routing::get(controller::clear_shortcuts))
         .route("/s/:hash", routing::get(controller::open_shortcut))
         .route("/s/:hash", routing::delete(controller::delete_shortcut))
-        .with_state((db_client, db_table_name));
-
+        .with_state((db_client, db_table_name, addr));
 
     let binding = axum::Server::try_bind(&addr);
     match binding {
-        Err(_) => tracing::error!("Cannot attach server to port {}", args.port),
+        Err(_) => tracing::error!("Cannot attach server to address {}", addr),
         Ok(b) => {
             let server = b.serve(app.into_make_service());
             let local_addr = server.local_addr();
@@ -149,13 +151,31 @@ pub async fn init(args: ClapArgs) {
                 tracing::error!("Check if your local ports are open")
             }
         }
-
     }
-
-
-
 }
 
 async fn test() -> impl IntoResponse {
     "Welcome to cli-shortener!"
+}
+
+fn get_addr(args: ClapArgs) -> SocketAddr {
+    let mut addr = SocketAddr::from((
+        args.host
+            .parse::<IpAddr>()
+            .unwrap_or(IpAddr::V4(Ipv4Addr::LOCALHOST)),
+        args.port,
+    ));
+    let addr_str = format!("{}:{}", args.host, args.port);
+    let listener = std::net::TcpListener::bind(&addr_str);
+
+    if listener.is_err() {
+        tracing::error!(
+            "Cannot bind to address {}, generating random port",
+            addr_str
+        );
+        addr.set_port(0);
+    }
+    std::mem::drop(listener);
+
+    addr
 }
