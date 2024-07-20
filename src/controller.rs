@@ -1,6 +1,6 @@
 use std::net::SocketAddr;
 
-use aws_sdk_dynamodb::{types::AttributeValue, Client};
+use aws_sdk_dynamodb::Client;
 use axum::{
     extract::{self, Path, State},
     http::StatusCode,
@@ -17,7 +17,6 @@ pub async fn open_shortcut(
     Path(hash): Path<String>,
 ) -> impl IntoResponse {
     match db::get_shortcut(&client, &table_name, &hash).await {
-        // TODO: Fix the link to not show localhost
         Ok(link) => {
             tracing::info!("Redirected http://{address}/{hash} to {link}");
             Redirect::temporary(&link).into_response()
@@ -44,7 +43,6 @@ pub async fn create_new_shortcut(
 
     match db::add_shortcut(&client, &table_name, &shortcut).await {
         Ok(_) => {
-            // TODO: Fix the link to not show localhost
             tracing::info!("Created shortcut http://{address}/{}", shortcut.hash);
             format!("http://{address}/{}", shortcut.hash).into_response()
         }
@@ -68,8 +66,6 @@ pub async fn get_all_shortcuts(
 ) -> impl IntoResponse {
     match db::get_all_shortcuts(&client, &table_name).await {
         Ok(items) => {
-            // let shortcuts: Vec<db::Shortcut> = Vec::new();
-
             let shortcuts: Vec<Shortcut> = items
                 .iter()
                 .filter_map(|fields| {
