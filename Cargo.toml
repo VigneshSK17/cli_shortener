@@ -13,6 +13,7 @@ clap = { version = "4.2.1", features = ["derive"] }
 cli-table = "0.4.7"
 dirs = "5.0.0"
 dotenv = "0.15.0"
+pcre2 = "0.2.7"
 random_word = "0.3.0"
 regex = "1.7.3"
 reqwest = { version = "0.11.16", features = ["tokio-rustls", "json"] }
