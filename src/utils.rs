@@ -1,10 +1,15 @@
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 
+/// Generates hash for link, roughly 2.5 million permutations
 pub fn gen_hash() -> String {
+    let word_len_1 = rand::thread_rng().gen_range(5..=7);
+    let word_len_2 = rand::thread_rng().gen_range(5..=7);
+
     format!(
         "{}-{}",
-        random_word::gen_len(5).expect("Could not generate hash"),
-        random_word::gen_len(5).expect("Could not generate hash")
+        random_word::gen_len(word_len_1).expect("Could not generate hash"),
+        random_word::gen_len(word_len_2).expect("Could not generate hash")
     )
 }
 

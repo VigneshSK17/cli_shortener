@@ -591,6 +591,7 @@ dependencies = [
  "dirs",
  "dotenv",
  "pcre2",
+ "rand",
  "random_word",
  "regex",
  "reqwest",
