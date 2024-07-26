@@ -140,12 +140,12 @@ pub async fn init(args: ClapArgs) {
     let addr = gen_addr(args);
 
     let app = axum::Router::new()
-        .route("/s", routing::get(test))
-        .route("/s", routing::post(controller::create_new_shortcut))
-        .route("/s/all", routing::get(controller::get_all_shortcuts))
-        .route("/s/clear", routing::get(controller::clear_shortcuts))
-        .route("/s/:hash", routing::get(controller::open_shortcut))
-        .route("/s/:hash", routing::delete(controller::delete_shortcut))
+        .route("/", routing::get(test))
+        .route("/", routing::post(controller::create_new_shortcut))
+        .route("/all", routing::get(controller::get_all_shortcuts))
+        .route("/clear", routing::get(controller::clear_shortcuts))
+        .route("/:hash", routing::get(controller::open_shortcut))
+        .route("/:hash", routing::delete(controller::delete_shortcut))
         .with_state((db_client, db_table_name, addr));
 
     let binding = axum::Server::try_bind(&addr);
