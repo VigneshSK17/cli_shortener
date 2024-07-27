@@ -1,12 +1,16 @@
-use std::{net::SocketAddr, str::FromStr, time::Duration};
+use std::{
+    env,
+    fs::File,
+    io::{Read, Write},
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+};
 
 use args::ClapArgs;
-use axum::{routing, response::IntoResponse};
+use axum::{response::IntoResponse, routing};
 use clap::Parser;
-use cli_table::{Cell, CellStruct, Table, Style, print_stdout};
+use cli_table::{print_stdout, Cell, CellStruct, Style, Table};
+use dotenv::dotenv;
 use reqwest::StatusCode;
-use sqlx::{sqlite::{SqlitePoolOptions, SqliteConnectOptions}, ConnectOptions};
-use utils::{CreateLink, Shortcut};
 
 mod args;
 mod controller;
@@ -15,12 +19,22 @@ mod utils;
 
 #[tokio::main]
 async fn main() {
-
     let args = args::ClapArgs::parse();
+
+    let local_addr = match matches!(args.entity_type, args::EntityType::Start) {
+        false => match get_local_addr() {
+            Ok(addr) => addr,
+            Err(_) => {
+                println!("Could not get address to access cli_shortener");
+                return;
+            }
+        },
+        true => SocketAddr::from(([127, 0, 0, 1], 0)), // just to initialize the variable
+    };
 
     match args.entity_type {
         args::EntityType::Clear => {
-            match reqwest::get("http://127.0.0.1:8080/clear").await {
+            match reqwest::get(format!("http://{local_addr}/s/clear")).await {
                 Err(_) => println!("\nThe links server has not been started. Use the start command to start the server"),
                 Ok(resp) => {
                     match resp.status() {
@@ -29,27 +43,26 @@ async fn main() {
                     }
                 }
             }
-        },
+        }
         args::EntityType::Start => {
             init(args).await;
-        },
+        }
         args::EntityType::List => {
-
-            if let Ok(resp) = reqwest::get("http://127.0.0.1:8080/all").await {
-
+            if let Ok(resp) = reqwest::get(format!("http://{local_addr}/s/all")).await {
                 if resp.status() == StatusCode::OK {
-                    if let Ok(shortcuts) = resp.json::<Vec<Shortcut>>().await {
-
+                    if let Ok(shortcuts) = resp.json::<Vec<db::Shortcut>>().await {
                         if !shortcuts.is_empty() {
                             let shortcuts_iter = shortcuts.into_iter();
 
-                            let table = shortcuts_iter.map(|s| {
-                                vec![s.link.cell(), s.hashed_link.cell()]
-                            })
-                            .collect::<Vec<Vec<CellStruct>>>()
-                            .table()
-                            .title(vec!["Original Link".cell().bold(true), "Shortcut Link".cell().bold(true)])
-                            .bold(true);
+                            let table = shortcuts_iter
+                                .map(|s| vec![s.link.cell(), s.hash.cell()])
+                                .collect::<Vec<Vec<CellStruct>>>()
+                                .table()
+                                .title(vec![
+                                    "Original Link".cell().bold(true),
+                                    "Shortcut Link".cell().bold(true),
+                                ])
+                                .bold(true);
 
                             if print_stdout(table).is_err() {
                                 println!("\nCould not show all shortcut links")
@@ -57,23 +70,22 @@ async fn main() {
                         } else {
                             println!("\nNo shortcuts have been created yet. Use the new command to create a new link")
                         }
-
-
                     } else {
                         println!("\nNo links could be found")
                     }
                 }
-
             } else {
                 println!("\nThe links server has not been started. Use the start command to start the server");
             }
-        },
+        }
         args::EntityType::New(new_command) => {
             let client = reqwest::Client::new();
-            let create_link = CreateLink { link: new_command.link };
+            let create_link = utils::CreateLink {
+                link: new_command.link,
+            };
 
             if utils::is_url(&create_link.link) {
-                match client.post("http://127.0.0.1:8080/")
+                match client.post(format!("http://{local_addr}/s"))
                     .json(&create_link)
                     .send().await {
                     Err(_) => println!("\nThe links server has not been started. Use the start command to start the server"),
@@ -88,15 +100,16 @@ async fn main() {
                     }
                 }
             } else {
-                println!("\nThe link given is not valid. Make sure to provide the full link address.")
+                println!(
+                    "\nThe link given is not valid. Make sure to provide the full link address."
+                )
             }
-
-        },
+        }
         args::EntityType::Delete(delete_command) => {
             let client = reqwest::Client::new();
             let hash = delete_command.link.split('/').last().unwrap();
 
-            match client.delete(format!("http://127.0.0.1:8080/{}", hash))
+            match client.delete(format!("http://{local_addr}/s/{hash}"))
                 .send().await {
                 Err(_) => println!("\nThe links server has not been started. Use the start command to start the server"),
                 Ok(resp) => {
@@ -108,83 +121,98 @@ async fn main() {
             }
         }
     }
-
 }
 
 pub async fn init(args: ClapArgs) {
-
-    let db_url = match db::get_db_path() {
-        Ok(s) => s,
-        Err(e) => {
-            println!("\n{:#?}", e.to_string());
-            std::process::exit(1);
-        }
-    };
-
+    dotenv().ok();
+    let db_client = db::init_db_client().await;
+    let db_table_name = env::var("AWS_TABLE_NAME").unwrap();
 
     tracing_subscriber::fmt()
-        .with_max_level(
-            if args.verbose { tracing::Level::DEBUG } else { tracing::Level::INFO }
-        )
+        .with_max_level(if args.verbose {
+            tracing::Level::DEBUG
+        } else {
+            tracing::Level::INFO
+        })
         .compact()
         .init();
 
-    let options = SqliteConnectOptions::from_str(&db_url).unwrap()
-        .log_statements(tracing::log::LevelFilter::Debug).clone();
-
-
-    let pool = match SqlitePoolOptions::new()
-        .max_connections(5)
-        .idle_timeout(Duration::from_secs(3))
-        .connect_with(options)
-        .await {
-
-        Ok(p) => p,
-        Err(_) => {
-            println!("\nCould not connect to database");
-            std::process::exit(1);
-        }
-
-    };
-
-    if db::create_schema(&pool).await.is_err() {
-        println!("\nCould not create table inside database")
-    }
-
-    tracing::debug!("Initialized database at {}", db_url);
-
+    let addr = gen_addr(args);
 
     let app = axum::Router::new()
         .route("/", routing::get(test))
-        .route("/", routing::post(controller::create_new_link))
-        .route("/all", routing::get(controller::get_all_links))
-        .route("/clear", routing::get(controller::clear_links))
-        .route("/:hash", routing::get(controller::open_link))
-        .route("/:hash", routing::delete(controller::delete_link))
-        .with_state(pool);
-
-
-    let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
+        .route("/", routing::post(controller::create_new_shortcut))
+        .route("/all", routing::get(controller::get_all_shortcuts))
+        .route("/clear", routing::get(controller::clear_shortcuts))
+        .route("/:hash", routing::get(controller::open_shortcut))
+        .route("/:hash", routing::delete(controller::delete_shortcut))
+        .with_state((db_client, db_table_name, addr));
 
     let binding = axum::Server::try_bind(&addr);
+
     match binding {
-        Err(_) => tracing::error!("Cannot attach server to port 8080"),
+        Err(_) => tracing::error!("Cannot attach server to address {}", addr),
         Ok(b) => {
             let server = b.serve(app.into_make_service());
             let local_addr = server.local_addr();
 
-            tracing::info!("Started on: http://localhost:{}", local_addr.port());
+            tracing::info!("Started on: http://{local_addr}");
+
+            if store_local_addr(&local_addr).is_err() {
+                tracing::error!("Could not store local address of server");
+            }
+
             if server.await.is_err() {
-                tracing::error!("Check if your local ports are open")
+                tracing::error!("Server stopped unexpectedly");
             }
         }
-
     }
-
-
-
 }
 
 async fn test() -> impl IntoResponse {
     "Welcome to cli-shortener!"
+}
+
+fn gen_addr(args: ClapArgs) -> SocketAddr {
+    let mut addr = SocketAddr::from((
+        args.host
+            .parse::<IpAddr>()
+            .unwrap_or(IpAddr::V4(Ipv4Addr::LOCALHOST)),
+        args.port,
+    ));
+    let addr_str = format!("{}:{}", args.host, args.port);
+    let listener = std::net::TcpListener::bind(&addr_str);
+
+    if listener.is_err() {
+        tracing::error!(
+            "Cannot bind to address {}, generating random port",
+            addr_str
+        );
+        addr.set_port(0);
+    }
+    std::mem::drop(listener);
+
+    addr
+}
+
+fn store_local_addr(addr: &SocketAddr) -> Result<(), std::io::Error> {
+    let mut file = File::create("/tmp/cli_shortener.txt")?;
+    file.write_all(format!("{}\n{}", &addr.ip(), &addr.port()).as_bytes())?;
+    Ok(())
+}
+
+fn get_local_addr() -> Result<SocketAddr, std::io::Error> {
+    let mut file = File::open("/tmp/cli_shortener.txt")?;
+    let mut contents = String::new();
+    file.read_to_string(&mut contents)?;
+    let values = contents.split_whitespace().collect::<Vec<&str>>();
+
+    let host = values[0]
+        .parse::<IpAddr>()
+        .map_err(|_| std::io::Error::last_os_error())?;
+    let port = values[1]
+        .parse::<u16>()
+        .map_err(|_| std::io::Error::last_os_error())?;
+
+    Ok(SocketAddr::from((host, port)))
 }

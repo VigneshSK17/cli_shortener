@@ -1,99 +1,209 @@
-use std::fs::File;
+use std::collections::HashMap;
 
-use sqlx::{Row, SqlitePool};
+use aws_config::{meta::region::RegionProviderChain, BehaviorVersion};
+use aws_sdk_dynamodb::{types::AttributeValue, Client};
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
-pub enum DbPathError {
-    #[error("directory not found")]
-    DataDirError(),
+pub enum DbError {
+    #[error("db request failed")]
+    RequestError(String),
 
-    #[error("database not created")]
-    DbFileCreationError(#[from] std::io::Error),
+    #[error("invalid data returned")]
+    RetrievalError(String),
 
+    #[error("duplicate data exists")]
+    DuplicationError(),
 }
 
-/// Grabs path for links database, creates if necessary
-pub fn get_db_path() -> Result<String, DbPathError> {
-    let mut path = dirs::data_local_dir()
-        .ok_or(DbPathError::DataDirError())?;
+#[derive(Deserialize, Serialize)]
+pub struct Shortcut {
+    pub link: String,
+    pub hash: String,
+}
 
-    path.push("cli_shortener/links.db");
+pub async fn init_db_client() -> Client {
+    let region_provider = RegionProviderChain::default_provider().or_else("us-east-2");
+    let config = aws_config::defaults(BehaviorVersion::latest())
+        .region(region_provider)
+        .load()
+        .await;
+    tracing::debug!("Initialized db");
+    Client::new(&config)
+}
 
-    if !path.is_file() {
-        File::create(&path)?;
+/// Add link with generated hash to db
+pub async fn add_shortcut(
+    client: &Client,
+    table_name: &str,
+    shortcut: &Shortcut,
+) -> Result<(), DbError> {
+    let link_av = AttributeValue::S(shortcut.link.to_string());
+    let hash_av = AttributeValue::S(shortcut.hash.to_string());
+
+    if get_shortcut(client, table_name, &shortcut.hash)
+        .await
+        .is_ok()
+    {
+        return Err(DbError::DuplicationError());
     }
 
-    Ok(path.to_string_lossy().to_string())
-}
+    let request = client
+        .put_item()
+        .table_name(table_name)
+        .item("link", link_av)
+        .item("link_hash", hash_av);
 
-/// Genreates schema for creating new links db
-pub async fn create_schema(pool: &SqlitePool) -> Result<(), sqlx::Error> {
-    sqlx::query(
-        r#"
-        CREATE TABLE IF NOT EXISTS links (
-            link text,
-            hash text
-        );
-    "#,
-    )
-    .execute(pool)
-    .await?;
+    tracing::debug!("Executing request [{request:?}] to add shortcut to db");
 
-    Ok(())
-}
+    request
+        .send()
+        .await
+        .map_err(|e| DbError::RequestError(e.to_string()))?;
 
-/// Add link with generated hash to links db
-pub async fn add_link(pool: &SqlitePool, link: &str, hash: &str) -> Result<(), sqlx::Error> {
-    sqlx::query("INSERT INTO links (link, hash) values ($1, $2)")
-        .bind(link)
-        .bind(hash)
-        .execute(pool)
-        .await?;
+    tracing::debug!(
+        "Added link {} with hash {} to db",
+        shortcut.link,
+        shortcut.hash
+    );
 
     Ok(())
 }
 
-/// Get the given hash's link from links db
-pub async fn get_link(pool: &SqlitePool, hash: &str) -> Result<String, sqlx::Error> {
-    let row = sqlx::query("SELECT link from links WHERE hash = $1")
-        .bind(hash)
-        .fetch_one(pool)
-        .await?;
+/// Get the given hash's link from db
+pub async fn get_shortcut(
+    client: &Client,
+    table_name: &str,
+    hash: &str,
+) -> Result<String, DbError> {
+    let request = client
+        .query()
+        .table_name(table_name)
+        .key_condition_expression("link_hash = :hash")
+        .expression_attribute_values(":hash", AttributeValue::S(hash.to_string()))
+        .projection_expression("link");
 
-    Ok(row.get("link"))
-}
+    tracing::debug!("Executing request [{request:?}] to get shortcut from db using hash");
 
-/// Get all links from links db
-pub async fn get_all_links(pool: &SqlitePool) -> Result<Vec<(String, String)>, sqlx::Error> {
-    let rows = sqlx::query("SELECT * from links").fetch_all(pool).await?;
+    let response = request
+        .send()
+        .await
+        .map_err(|e| DbError::RequestError(e.to_string()))?;
 
-    let links: Vec<(String, String)> = rows
-        .iter()
-        .map(|r| (r.get("link"), r.get("hash")))
-        .collect();
-
-    Ok(links)
-}
-
-/// Deletes the given hash's link from links db
-pub async fn delete_link(pool: &SqlitePool, hash: &str) -> Result<(), sqlx::Error> {
-    let result = sqlx::query("DELETE from links WHERE hash = $1")
-        .bind(hash)
-        .execute(pool)
-        .await?;
-
-    if result.rows_affected() == 0 {
-        Err(sqlx::Error::ColumnNotFound(format!("Column {hash} not found")))
-    } else {
-        Ok(())
+    match response.items {
+        None => Err(DbError::RetrievalError(
+            "Query response did not have any items to check".to_string(),
+        )),
+        Some(items) => match items.len() {
+            1 => {
+                let link = items[0].get("link");
+                if link.is_none() || link.unwrap().as_s().is_err() {
+                    Err(DbError::RetrievalError(
+                        "Query response item did not provide a valid link".to_string(),
+                    ))
+                } else {
+                    let link_str = link.unwrap().as_s().unwrap().to_string();
+                    tracing::debug!("Fetched link {link_str} from hash {hash}");
+                    Ok(link_str)
+                }
+            }
+            l => Err(DbError::RetrievalError(format!(
+                "Query had {l} entries instead of one"
+            ))),
+        },
     }
-
 }
 
-/// Clears all links from links db
-pub async fn clear_links(pool: &SqlitePool) -> Result<(), sqlx::Error> {
-    sqlx::query("DELETE from links").execute(pool).await?;
+pub async fn get_all_shortcuts(
+    client: &Client,
+    table_name: &str,
+) -> Result<Vec<HashMap<String, AttributeValue>>, DbError> {
+    let request = client.scan().table_name(table_name);
+
+    tracing::debug!("Executing request [{request:?}] to get shortcut from db using hash");
+
+    let response = request
+        .send()
+        .await
+        .map_err(|e| DbError::RequestError(e.to_string()))?;
+
+    match response.items {
+        None => Err(DbError::RetrievalError(
+            "Scan response did not function properly".to_string(),
+        )),
+        Some(items) => Ok(items),
+    }
+}
+
+/// Deletes the given hash's shortcut from db
+pub async fn delete_shortcut(client: &Client, table_name: &str, hash: &str) -> Result<(), DbError> {
+    let request = client
+        .delete_item()
+        .table_name(table_name)
+        .key("link_hash", AttributeValue::S(hash.to_string()));
+
+    tracing::debug!("Executing request [{request:?}] to get shortcut from db using hash");
+
+    let _response = request
+        .send()
+        .await
+        .map_err(|e| DbError::RequestError(e.to_string()))?;
+
+    tracing::debug!("Deleted link with {hash}");
+    Ok(())
+}
+
+/// Clears all shortcuts from db
+pub async fn clear_shortcuts(client: &Client, table_name: &str) -> Result<(), DbError> {
+    let request = client.delete_table().table_name(table_name);
+
+    tracing::debug!("Executing request [{request:?}] to get shortcut from db using hash");
+
+    let response = request.send().await;
+    match response {
+        Ok(_) => {
+            tracing::debug!("Cleared {table_name}");
+            Ok(())
+        }
+        Err(e) => Err(DbError::RequestError(e.to_string())),
+    }
+}
+
+#[cfg(test)]
+#[tokio::test]
+async fn test_init_db() -> Result<(), aws_sdk_dynamodb::Error> {
+    dotenv().ok();
+    let client = init_db_client().await;
+    let resp = client.list_tables().send().await?;
+
+    assert_eq!(resp.table_names().len(), 1);
 
     Ok(())
+}
+
+#[tokio::test]
+async fn test_add_to_db() -> Result<(), DbError> {
+    dotenv().ok();
+    let client = init_db_client().await;
+    let table_name = std::env::var("AWS_TABLE_NAME").unwrap();
+
+    let shortcut = Shortcut {
+        link: "https://www.google.com".to_string(),
+        hash: "hello-world".to_string(),
+    };
+    add_shortcut(&client, &table_name, &shortcut).await?;
+
+    let link = get_shortcut(&client, &table_name, &shortcut.hash)
+        .await
+        .unwrap();
+
+    assert_eq!(link, shortcut.link);
+
+    delete_shortcut(&client, &table_name, &shortcut.hash).await?;
+
+    match get_shortcut(&client, &table_name, &shortcut.hash).await {
+        Ok(_) => Err(DbError::DuplicationError()),
+        Err(_) => Ok(()),
+    }
 }

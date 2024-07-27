@@ -6,15 +6,19 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+aws-config = { version = "1.5.4", features = ["behavior-version-latest"] }
+aws-sdk-dynamodb = "1.38.0"
 axum = "0.6.12"
 clap = { version = "4.2.1", features = ["derive"] }
 cli-table = "0.4.7"
 dirs = "5.0.0"
+dotenv = "0.15.0"
+openssl = { version = "0.10.66", features = ["vendored"] }
+rand = "0.8.5"
 random_word = "0.3.0"
 regex = "1.7.3"
 reqwest = { version = "0.11.16", features = ["tokio-rustls", "json"] }
 serde = { version = "1.0.159", features = ["derive"] }
-sqlx = { version = "0.6.3", features = ["runtime-tokio-rustls", "any", "postgres", "sqlite"] }
 thiserror = "1.0.61"
 tokio = { version = "1.27.0", features = ["full"] }
 tower-http = { version = "0.4.0", features = ["cors"] }
