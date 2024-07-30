@@ -173,7 +173,7 @@ pub async fn clear_shortcuts(client: &Client, table_name: &str) -> Result<(), Db
 #[cfg(test)]
 #[tokio::test]
 async fn test_init_db() -> Result<(), aws_sdk_dynamodb::Error> {
-    dotenv().ok();
+    dotenv::dotenv().ok();
     let client = init_db_client().await;
     let resp = client.list_tables().send().await?;
 
@@ -184,7 +184,7 @@ async fn test_init_db() -> Result<(), aws_sdk_dynamodb::Error> {
 
 #[tokio::test]
 async fn test_add_to_db() -> Result<(), DbError> {
-    dotenv().ok();
+    dotenv::dotenv().ok();
     let client = init_db_client().await;
     let table_name = std::env::var("AWS_TABLE_NAME").unwrap();
 

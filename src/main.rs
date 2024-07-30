@@ -140,7 +140,7 @@ pub async fn init(args: ClapArgs) {
     let addr = gen_addr(args);
 
     let app = axum::Router::new()
-        .route("/", routing::get(test))
+        .route("/", routing::get(controller::index))
         .route("/", routing::post(controller::create_new_shortcut))
         .route("/all", routing::get(controller::get_all_shortcuts))
         .route("/clear", routing::get(controller::clear_shortcuts))
@@ -167,10 +167,6 @@ pub async fn init(args: ClapArgs) {
             }
         }
     }
-}
-
-async fn test() -> impl IntoResponse {
-    "Welcome to cli-shortener!"
 }
 
 fn gen_addr(args: ClapArgs) -> SocketAddr {

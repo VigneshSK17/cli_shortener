@@ -1,15 +1,16 @@
 use std::net::SocketAddr;
 
+use askama::Template;
 use aws_sdk_dynamodb::Client;
 use axum::{
     extract::{self, Path, State},
     http::StatusCode,
-    response::{IntoResponse, Redirect},
+    response::{Html, IntoResponse, Redirect},
 };
 
 use crate::{
     db::{self, Shortcut},
-    utils,
+    utils::{self, IndexTemplate},
 };
 
 pub async fn open_shortcut(
@@ -132,6 +133,20 @@ pub async fn clear_shortcuts(
                 "Could not clear shortcuts",
             )
                 .into_response()
+        }
+    }
+}
+
+pub async fn index(
+    State((client, table_name, _)): State<(Client, String, SocketAddr)>,
+) -> impl IntoResponse {
+    let template = IndexTemplate { url: "/".to_string() };
+
+    match template.render() {
+        Ok(reply_html) => (StatusCode::OK, Html(reply_html).into_response()).into_response(),
+        Err(e) => {
+            tracing::error!("Could not render template: {e:?}");
+            (StatusCode::INTERNAL_SERVER_ERROR, "Could not render template").into_response()
         }
     }
 }
