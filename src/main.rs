@@ -33,22 +33,11 @@ async fn main() {
     };
 
     match args.entity_type {
-        args::EntityType::Clear => {
-            match reqwest::get(format!("http://{local_addr}/s/clear")).await {
-                Err(_) => println!("\nThe links server has not been started. Use the start command to start the server"),
-                Ok(resp) => {
-                    match resp.status() {
-                        StatusCode::OK => println!("\nCleared links"),
-                        _ => println!("\nCould not clear links")
-                    }
-                }
-            }
-        }
         args::EntityType::Start => {
             init(args).await;
         }
         args::EntityType::List => {
-            if let Ok(resp) = reqwest::get(format!("http://{local_addr}/s/all")).await {
+            if let Ok(resp) = reqwest::get(format!("http://{local_addr}/all")).await {
                 if resp.status() == StatusCode::OK {
                     if let Ok(shortcuts) = resp.json::<Vec<db::Shortcut>>().await {
                         if !shortcuts.is_empty() {
@@ -85,7 +74,7 @@ async fn main() {
             };
 
             if utils::is_url(&create_link.link) {
-                match client.post(format!("http://{local_addr}/s"))
+                match client.post(format!("http://{local_addr}/"))
                     .json(&create_link)
                     .send().await {
                     Err(_) => println!("\nThe links server has not been started. Use the start command to start the server"),
@@ -109,7 +98,7 @@ async fn main() {
             let client = reqwest::Client::new();
             let hash = delete_command.link.split('/').last().unwrap();
 
-            match client.delete(format!("http://{local_addr}/s/{hash}"))
+            match client.delete(format!("http://{local_addr}/{hash}"))
                 .send().await {
                 Err(_) => println!("\nThe links server has not been started. Use the start command to start the server"),
                 Ok(resp) => {
@@ -143,7 +132,6 @@ pub async fn init(args: ClapArgs) {
         .route("/", routing::get(controller::index))
         .route("/", routing::post(controller::create_new_shortcut))
         .route("/all", routing::get(controller::get_all_shortcuts))
-        .route("/clear", routing::get(controller::clear_shortcuts))
         .route("/:hash", routing::get(controller::open_shortcut))
         .route("/:hash", routing::delete(controller::delete_shortcut))
         .with_state((db_client, db_table_name, addr));

@@ -10,7 +10,7 @@ use axum::{
 
 use crate::{
     db::{self, Shortcut},
-    utils::{self, IndexTemplate},
+    utils::{self, is_url, IndexTemplate},
 };
 
 pub async fn open_shortcut(
@@ -37,6 +37,18 @@ pub async fn create_new_shortcut(
     State((client, table_name, address)): State<(Client, String, SocketAddr)>,
     extract::Json(create_link): extract::Json<utils::CreateLink>,
 ) -> impl IntoResponse {
+
+    if !is_url(&create_link.link) {
+        tracing::error!(
+            "Could not verify that the provided link is a valid URL: {}",
+            create_link.link
+        );
+        return (
+            StatusCode::BAD_REQUEST,
+            "Invalid URL provided as link"
+        ).into_response();
+    }
+
     let shortcut = Shortcut {
         link: create_link.link,
         hash: utils::gen_hash(),
@@ -112,25 +124,6 @@ pub async fn delete_shortcut(
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Could not delete shortcut",
-            )
-                .into_response()
-        }
-    }
-}
-
-pub async fn clear_shortcuts(
-    State((client, table_name, _)): State<(Client, String, SocketAddr)>,
-) -> impl IntoResponse {
-    match db::clear_shortcuts(&client, &table_name).await {
-        Ok(_) => {
-            tracing::info!("Cleared shortcuts");
-            StatusCode::OK.into_response()
-        }
-        Err(e) => {
-            tracing::error!("Could not clear shortcuts: {e:?}");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Could not clear shortcuts",
             )
                 .into_response()
         }

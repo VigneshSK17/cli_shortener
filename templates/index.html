@@ -4,6 +4,68 @@
 
 {% block content %}
 
-    <h1 class="title">CLI Shortener, but Web!</h1>
+    <section class="hero">
+        <div class="hero-body">
+            <div class="container has-text-centered">
+                <h1 class="title">CLI Shortener, but Web!</h1>
+            </div>
+        </div>
+    </section>
+
+    <section class="section">
+        <h2 class="title">Modify Link</h2>
+        <div class="field">
+            <label class="label">Link</label>
+            <div class="control">
+                <input type="text" class="input" id="shortcut-input" placeholder="https://www.google.com">
+            </div>
+            <p class="help">Note: If deleting shortcut, input shortcut link not the original</p>
+        </div>
+
+        <article class="notification is-light" id="submit-notification" style="display: none;">
+        </article>
+
+        <div class="field is-grouped">
+            <div class="control">
+              <button class="button is-link" onclick="create()">Create Shortcut</button>
+            </div>
+            <div class="control">
+              <button class="button is-link is-danger is-light">Delete Shortcut</button>
+            </div>
+        </div>
+    </section>
+
+    <script>
+
+        let input = document.getElementById('shortcut-input');
+        let notif = document.getElementById('submit-notification');
+        let del_button = notif.childNodes[0];
+
+        const create = async (event) => {
+            let link_dict = {"link": input.value};
+
+            const response = await fetch("/", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(link_dict)
+            });
+
+            if (response.status != 200) {
+                notif.textContent = await response.text();
+                notif.classList.remove("is-success");
+                notif.classList.add("is-danger");
+                notif.style.display = "block";
+            } else {
+                // TODO: Modify text to display correct link when deployed
+                notif.textContent = `Shortcut created! ${await response.text()}`;
+                notif.classList.add("is-success");
+                notif.classList.remove("is-danger");
+                notif.style.display = "block";
+            }
+        }
+
+    </script>
 
 {% endblock %}
