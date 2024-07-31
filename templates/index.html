@@ -30,9 +30,10 @@
               <button class="button is-link" onclick="create()">Create Shortcut</button>
             </div>
             <div class="control">
-              <button class="button is-link is-danger is-light">Delete Shortcut</button>
+              <button class="button is-link is-danger is-light" onclick="remove()">Delete Shortcut</button>
             </div>
         </div>
+
     </section>
 
     <script>
@@ -64,6 +65,31 @@
                 notif.classList.remove("is-danger");
                 notif.style.display = "block";
             }
+        }
+
+        // TODO: Add a modal (look up bulma)
+        const remove = async (event) => {
+            let hash = input.value.split('/').at(-1).trim();
+
+            const response = await fetch("/" + hash, {
+                method: "DELETE"
+            });
+
+            if (response.status != 204) {
+                notif.textContent = await response.text();
+                notif.classList.remove("is-success");
+                notif.classList.add("is-danger");
+                notif.style.display = "block";
+            } else {
+                notif.textContent = `Shortcut deleted!`;
+                notif.classList.add("is-success");
+                notif.classList.remove("is-danger");
+                notif.style.display = "block";
+            }
+        }
+
+        const remove_modal = () => {
+
         }
 
     </script>

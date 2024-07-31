@@ -114,6 +114,16 @@ pub async fn delete_shortcut(
     State((client, table_name, _)): State<(Client, String, SocketAddr)>,
     Path(hash): Path<String>,
 ) -> impl IntoResponse {
+
+    if let Err(e) = db::get_shortcut(&client, &table_name, &hash).await {
+        tracing::error!("Could not locate shortcut with {hash}: {e:?}");
+        return (
+            StatusCode::BAD_REQUEST,
+            "The given shortcut does not exist",
+        )
+            .into_response()
+    }
+
     match db::delete_shortcut(&client, &table_name, &hash).await {
         Ok(_) => {
             tracing::info!("Deleted shortcut with hash {hash}");
