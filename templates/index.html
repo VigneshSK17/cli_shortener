@@ -30,12 +30,11 @@
               <button class="button is-link" onclick="create()">Create Shortcut</button>
             </div>
             <div class="control">
-              <button class="button is-link is-danger is-light" onclick="remove()">Delete Shortcut</button>
+              <button class="js-modal-trigger button is-link is-danger is-light" data-target="modal-confirm-delete">Delete Shortcut</button>
             </div>
         </div>
 
     </section>
-
     <script>
 
         let input = document.getElementById('shortcut-input');
@@ -68,6 +67,41 @@
         }
 
         // TODO: Add a modal (look up bulma)
+        document.addEventListener("DOMContentLoaded", () => {
+            function openModal($el) {
+                $el.classList.add("is-active");
+            }
+
+            function closeModal($el) {
+                $el.classList.remove("is-active")
+            }
+
+            (document.querySelectorAll('.js-modal-trigger') || []).forEach(($trigger) => {
+              const modal = $trigger.dataset.target;
+              const $target = document.getElementById(modal);
+
+              $trigger.addEventListener('click', () => {
+                openModal($target);
+              });
+            });
+
+            (document.querySelectorAll('#cancel .modal-background, .modal-close, .modal-card-head .delete, .modal-card-foot') || []).forEach(($close) => {
+                const $target = $close.closest('.modal');
+
+                $close.addEventListener('click', () => {
+                  closeModal($target);
+                });
+            });
+
+            (document.querySelectorAll('#confirm') || []).forEach(($close) => {
+                const $target = $close.closest('.modal');
+
+                $close.addEventListener('click', async () => {
+                  closeModal($target);
+                  await remove();
+                });
+            });
+        });
         const remove = async (event) => {
             let hash = input.value.split('/').at(-1).trim();
 
@@ -88,10 +122,26 @@
             }
         }
 
-        const remove_modal = () => {
-
-        }
-
     </script>
+
+    <div id="modal-confirm-delete" class="modal">
+        <div class="modal-background"></div>
+        <div class="modal-card">
+            <header class="modal-card-head">
+                <p class="modal-card-title">Are you sure you want to delete this shortcut?</p>
+            </header>
+
+            <footer class="modal-card-foot">
+                <div class="buttons">
+                    <button id="confirm" class="button is-danger">Yes</button>
+                    <button id="cancel" class="button" aria-label="close">No</button>
+                </div>
+            </footer>
+
+            <button class="modal-close is-large" aria-label="close"></button>
+        </div>
+
+    </div>
+
 
 {% endblock %}
