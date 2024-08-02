@@ -41,6 +41,18 @@
         let notif = document.getElementById('submit-notification');
         let del_button = notif.childNodes[0];
 
+        const set_notif = (is_success = true) => {
+            if (is_success) {
+                notif.classList.add("is-success");
+                notif.classList.remove("is-danger");
+            } else {
+                notif.classList.remove("is-success");
+                notif.classList.add("is-danger");
+            }
+            notif.style.display = "block";
+            input.value = "";
+        }
+
         const create = async (event) => {
             let link_dict = {"link": input.value};
 
@@ -54,11 +66,9 @@
 
             if (response.status != 200) {
                 notif.textContent = await response.text();
-                notif.classList.remove("is-success");
-                notif.classList.add("is-danger");
+                set_notif(false);
             } else {
                 // TODO: (Check this) Modify text to display correct link when deployed
-                // const text_div = document.createElement("div");
                 notif.textContent = "";
 
                 const span_text = document.createElement("span");
@@ -77,12 +87,8 @@
                 notif.appendChild(span_text);
                 notif.appendChild(span_link);
 
-                // notif.textContent = `Shortcut created! ${window_location}/${hash}`;
-                notif.classList.add("is-success");
-                notif.classList.remove("is-danger");
+                set_notif();
             }
-            notif.style.display = "block";
-            input.value = "";
         }
 
         document.addEventListener("DOMContentLoaded", () => {
@@ -99,7 +105,13 @@
               const $target = document.getElementById(modal);
 
               $trigger.addEventListener('click', () => {
-                openModal($target);
+                if (input.value.trim() === "") {
+                    notif.textContent = "Empty URL provided as shortcut";
+                    set_notif(false);
+                } else {
+                    openModal($target);
+                }
+
               });
             });
 
@@ -129,15 +141,11 @@
 
             if (response.status != 204) {
                 notif.textContent = await response.text();
-                notif.classList.remove("is-success");
-                notif.classList.add("is-danger");
+                set_notif(false);
             } else {
                 notif.textContent = `Shortcut deleted!`;
-                notif.classList.add("is-success");
-                notif.classList.remove("is-danger");
+                set_notif(true);
             }
-            notif.style.display = "block";
-            input.value = "";
         }
 
     </script>
