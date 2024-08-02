@@ -1,6 +1,17 @@
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 
+#[derive(Deserialize, Serialize)]
+pub struct CreateLink {
+    pub link: String,
+}
+
+#[derive(askama_axum::Template)]
+#[template(path = "index.html")]
+pub struct IndexTemplate {
+    pub url: String,
+}
+
 /// Generates hash for link, roughly 2.5 million permutations
 pub fn gen_hash() -> String {
     let word_len_1 = rand::thread_rng().gen_range(5..=7);
@@ -16,11 +27,6 @@ pub fn gen_hash() -> String {
 pub fn is_url(url: &str) -> bool {
     const REGEX: &str = r"https?://(www\.)?[-a-zA-Z0-9@:%._\+~#=]{2,256}\.[a-z]{2,4}\b([-a-zA-Z0-9@:%_\+.~#?&//=]*)";
     regex::Regex::new(REGEX).unwrap().is_match(url)
-}
-
-#[derive(Deserialize, Serialize)]
-pub struct CreateLink {
-    pub link: String,
 }
 
 #[test]

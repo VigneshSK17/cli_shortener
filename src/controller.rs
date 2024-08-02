@@ -1,15 +1,16 @@
 use std::net::SocketAddr;
 
+use askama::Template;
 use aws_sdk_dynamodb::Client;
 use axum::{
     extract::{self, Path, State},
     http::StatusCode,
-    response::{IntoResponse, Redirect},
+    response::{Html, IntoResponse, Redirect},
 };
 
 use crate::{
     db::{self, Shortcut},
-    utils,
+    utils::{self, is_url, IndexTemplate},
 };
 
 pub async fn open_shortcut(
@@ -36,6 +37,18 @@ pub async fn create_new_shortcut(
     State((client, table_name, address)): State<(Client, String, SocketAddr)>,
     extract::Json(create_link): extract::Json<utils::CreateLink>,
 ) -> impl IntoResponse {
+
+    if !is_url(&create_link.link) {
+        tracing::error!(
+            "Could not verify that the provided link is a valid URL: {}",
+            create_link.link
+        );
+        return (
+            StatusCode::BAD_REQUEST,
+            "Invalid URL provided as link"
+        ).into_response();
+    }
+
     let shortcut = Shortcut {
         link: create_link.link,
         hash: utils::gen_hash(),
@@ -101,6 +114,16 @@ pub async fn delete_shortcut(
     State((client, table_name, _)): State<(Client, String, SocketAddr)>,
     Path(hash): Path<String>,
 ) -> impl IntoResponse {
+
+    if let Err(e) = db::get_shortcut(&client, &table_name, &hash).await {
+        tracing::error!("Could not locate shortcut with {hash}: {e:?}");
+        return (
+            StatusCode::BAD_REQUEST,
+            "The given shortcut does not exist",
+        )
+            .into_response()
+    }
+
     match db::delete_shortcut(&client, &table_name, &hash).await {
         Ok(_) => {
             tracing::info!("Deleted shortcut with hash {hash}");
@@ -117,21 +140,16 @@ pub async fn delete_shortcut(
     }
 }
 
-pub async fn clear_shortcuts(
+pub async fn index(
     State((client, table_name, _)): State<(Client, String, SocketAddr)>,
 ) -> impl IntoResponse {
-    match db::clear_shortcuts(&client, &table_name).await {
-        Ok(_) => {
-            tracing::info!("Cleared shortcuts");
-            StatusCode::OK.into_response()
-        }
+    let template = IndexTemplate { url: "/".to_string() };
+
+    match template.render() {
+        Ok(reply_html) => (StatusCode::OK, Html(reply_html).into_response()).into_response(),
         Err(e) => {
-            tracing::error!("Could not clear shortcuts: {e:?}");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Could not clear shortcuts",
-            )
-                .into_response()
+            tracing::error!("Could not render template: {e:?}");
+            (StatusCode::INTERNAL_SERVER_ERROR, "Could not render template").into_response()
         }
     }
 }

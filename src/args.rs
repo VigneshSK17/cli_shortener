@@ -27,8 +27,6 @@ pub enum EntityType {
     /// Delete a shortened link
     Delete(DeleteCommand),
 
-    /// Deletes all existing shortened links
-    Clear,
     /// Lists all active shortened links
     List,
     /// Starts the web server which redirects the shortened links
