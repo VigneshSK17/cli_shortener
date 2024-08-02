@@ -56,17 +56,35 @@
                 notif.textContent = await response.text();
                 notif.classList.remove("is-success");
                 notif.classList.add("is-danger");
-                notif.style.display = "block";
             } else {
-                // TODO: Modify text to display correct link when deployed
-                notif.textContent = `Shortcut created! ${await response.text()}`;
+                // TODO: (Check this) Modify text to display correct link when deployed
+                // const text_div = document.createElement("div");
+                notif.textContent = "";
+
+                const span_text = document.createElement("span");
+                const span_link = document.createElement("span");
+                const link = document.createElement("a");
+
+                span_text.textContent = "Shortcut created! ";
+
+                const hash = (await response.text()).split("/").at(-1).trim();
+                const window_location = window.location.origin
+                    + (window.location.pathname !== "/" ? window.location.pathname : "");
+                link.setAttribute("href", `${window_location}/${hash}`);
+                link.textContent = `${window_location}/${hash}`;
+
+                span_link.appendChild(link);
+                notif.appendChild(span_text);
+                notif.appendChild(span_link);
+
+                // notif.textContent = `Shortcut created! ${window_location}/${hash}`;
                 notif.classList.add("is-success");
                 notif.classList.remove("is-danger");
-                notif.style.display = "block";
             }
+            notif.style.display = "block";
+            input.value = "";
         }
 
-        // TODO: Add a modal (look up bulma)
         document.addEventListener("DOMContentLoaded", () => {
             function openModal($el) {
                 $el.classList.add("is-active");
@@ -113,13 +131,13 @@
                 notif.textContent = await response.text();
                 notif.classList.remove("is-success");
                 notif.classList.add("is-danger");
-                notif.style.display = "block";
             } else {
                 notif.textContent = `Shortcut deleted!`;
                 notif.classList.add("is-success");
                 notif.classList.remove("is-danger");
-                notif.style.display = "block";
             }
+            notif.style.display = "block";
+            input.value = "";
         }
 
     </script>
