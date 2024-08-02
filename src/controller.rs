@@ -141,7 +141,7 @@ pub async fn delete_shortcut(
 }
 
 pub async fn index(
-    State((client, table_name, _)): State<(Client, String, SocketAddr)>,
+    State((_client, _table_name, _)): State<(Client, String, SocketAddr)>,
 ) -> impl IntoResponse {
     let template = IndexTemplate { url: "/".to_string() };
 

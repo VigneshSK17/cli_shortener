@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use aws_config::{meta::region::RegionProviderChain, BehaviorVersion};
-use aws_sdk_dynamodb::{types::{builders::KeySchemaElementBuilder, AttributeValue, KeySchemaElement, KeyType, ScalarAttributeType}, Client};
+use aws_sdk_dynamodb::{types::AttributeValue, Client};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 

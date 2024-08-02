@@ -6,7 +6,7 @@ use std::{
 };
 
 use args::ClapArgs;
-use axum::{response::IntoResponse, routing};
+use axum::routing;
 use clap::Parser;
 use cli_table::{print_stdout, Cell, CellStruct, Style, Table};
 use dotenv::dotenv;
@@ -126,14 +126,15 @@ pub async fn init(args: ClapArgs) {
         .compact()
         .init();
 
-    let addr = gen_addr(args);
+    let addr = gen_addr(&args);
+    let path = args.path.as_str();
 
     let app = axum::Router::new()
-        .route("/", routing::get(controller::index))
-        .route("/", routing::post(controller::create_new_shortcut))
-        .route("/all", routing::get(controller::get_all_shortcuts))
-        .route("/:hash", routing::get(controller::open_shortcut))
-        .route("/:hash", routing::delete(controller::delete_shortcut))
+        .route(&format!("/{path}"), routing::get(controller::index))
+        .route(&format!("/{path}"), routing::post(controller::create_new_shortcut))
+        .route(&format!("/{path}/all"), routing::get(controller::get_all_shortcuts))
+        .route(&format!("/{path}/:hash"), routing::get(controller::open_shortcut))
+        .route(&format!("/{path}/:hash"), routing::delete(controller::delete_shortcut))
         .with_state((db_client, db_table_name, addr));
 
     let binding = axum::Server::try_bind(&addr);
@@ -157,7 +158,7 @@ pub async fn init(args: ClapArgs) {
     }
 }
 
-fn gen_addr(args: ClapArgs) -> SocketAddr {
+fn gen_addr(args: &ClapArgs) -> SocketAddr {
     let mut addr = SocketAddr::from((
         args.host
             .parse::<IpAddr>()
