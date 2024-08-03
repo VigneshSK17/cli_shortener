@@ -130,8 +130,8 @@ pub async fn init(args: ClapArgs) {
     let path = args.path.as_str();
 
     let app = axum::Router::new()
-        .route(&format!("/{path}"), routing::get(controller::index))
-        .route(&format!("/{path}"), routing::post(controller::create_new_shortcut))
+        .route(&format!("/{path}/"), routing::get(controller::index))
+        .route(&format!("/{path}/"), routing::post(controller::create_new_shortcut))
         .route(&format!("/{path}/all"), routing::get(controller::get_all_shortcuts))
         .route(&format!("/{path}/:hash"), routing::get(controller::open_shortcut))
         .route(&format!("/{path}/:hash"), routing::delete(controller::delete_shortcut))
@@ -145,7 +145,7 @@ pub async fn init(args: ClapArgs) {
             let server = b.serve(app.into_make_service());
             let local_addr = server.local_addr();
 
-            tracing::info!("Started on: http://{local_addr}");
+            tracing::info!("Started on: http://{local_addr}/{path}/");
 
             if store_local_addr(&local_addr).is_err() {
                 tracing::error!("Could not store local address of server");

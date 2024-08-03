@@ -56,7 +56,8 @@
         const create = async (event) => {
             let link_dict = {"link": input.value};
 
-            const response = await fetch("/", {
+            // TODO: Fix fetch to include pathname
+            const response = await fetch(window.location.pathname, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json"
@@ -78,10 +79,9 @@
                 span_text.textContent = "Shortcut created! ";
 
                 const hash = (await response.text()).split("/").at(-1).trim();
-                const window_location = window.location.origin
-                    + (window.location.pathname !== "/" ? window.location.pathname : "");
-                link.setAttribute("href", `${window_location}/${hash}`);
-                link.textContent = `${window_location}/${hash}`;
+                const window_location = window.location.origin + window.location.pathname;
+                link.setAttribute("href", `${window_location}${hash}`);
+                link.textContent = `${window_location}${hash}`;
 
                 span_link.appendChild(link);
                 notif.appendChild(span_text);
@@ -135,7 +135,7 @@
         const remove = async (event) => {
             let hash = input.value.split('/').at(-1).trim();
 
-            const response = await fetch("/" + hash, {
+            const response = await fetch(window.location.pathname + hash, {
                 method: "DELETE"
             });
 
