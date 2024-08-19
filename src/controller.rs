@@ -1,24 +1,25 @@
 use std::net::SocketAddr;
 
+use askama::Template;
 use aws_sdk_dynamodb::Client;
 use axum::{
     extract::{self, Path, State},
     http::StatusCode,
-    response::{IntoResponse, Redirect},
+    response::{Html, IntoResponse, Redirect},
 };
 
 use crate::{
     db::{self, Shortcut},
-    utils,
+    utils::{self, is_url, IndexTemplate},
 };
 
 pub async fn open_shortcut(
-    State((client, table_name, address)): State<(Client, String, SocketAddr)>,
+    State((client, table_name, address, path)): State<(Client, String, SocketAddr, String)>,
     Path(hash): Path<String>,
 ) -> impl IntoResponse {
     match db::get_shortcut(&client, &table_name, &hash).await {
         Ok(link) => {
-            tracing::info!("Redirected http://{address}/{hash} to {link}");
+            tracing::info!("Redirected http://{address}/{path}/{hash} to {link}");
             Redirect::temporary(&link).into_response()
         }
         Err(e) => {
@@ -33,9 +34,21 @@ pub async fn open_shortcut(
 }
 
 pub async fn create_new_shortcut(
-    State((client, table_name, address)): State<(Client, String, SocketAddr)>,
+    State((client, table_name, address, path)): State<(Client, String, SocketAddr, String)>,
     extract::Json(create_link): extract::Json<utils::CreateLink>,
 ) -> impl IntoResponse {
+
+    if !is_url(&create_link.link) {
+        tracing::error!(
+            "Could not verify that the provided link is a valid URL: {}",
+            create_link.link
+        );
+        return (
+            StatusCode::BAD_REQUEST,
+            "Invalid URL provided as link"
+        ).into_response();
+    }
+
     let shortcut = Shortcut {
         link: create_link.link,
         hash: utils::gen_hash(),
@@ -43,8 +56,8 @@ pub async fn create_new_shortcut(
 
     match db::add_shortcut(&client, &table_name, &shortcut).await {
         Ok(_) => {
-            tracing::info!("Created shortcut http://{address}/{}", shortcut.hash);
-            format!("http://{address}/{}", shortcut.hash).into_response()
+            tracing::info!("Created shortcut http://{address}/{path}/{}", shortcut.hash);
+            format!("http://{address}/{path}/{}", shortcut.hash).into_response()
         }
         Err(e) => {
             tracing::error!(
@@ -62,7 +75,7 @@ pub async fn create_new_shortcut(
 }
 
 pub async fn get_all_shortcuts(
-    State((client, table_name, _)): State<(Client, String, SocketAddr)>,
+    State((client, table_name, _, _)): State<(Client, String, SocketAddr, String)>,
 ) -> impl IntoResponse {
     match db::get_all_shortcuts(&client, &table_name).await {
         Ok(items) => {
@@ -98,9 +111,19 @@ pub async fn get_all_shortcuts(
 }
 
 pub async fn delete_shortcut(
-    State((client, table_name, _)): State<(Client, String, SocketAddr)>,
+    State((client, table_name, _, _)): State<(Client, String, SocketAddr, String)>,
     Path(hash): Path<String>,
 ) -> impl IntoResponse {
+
+    if let Err(e) = db::get_shortcut(&client, &table_name, &hash).await {
+        tracing::error!("Could not locate shortcut with {hash}: {e:?}");
+        return (
+            StatusCode::BAD_REQUEST,
+            "The given shortcut does not exist",
+        )
+            .into_response()
+    }
+
     match db::delete_shortcut(&client, &table_name, &hash).await {
         Ok(_) => {
             tracing::info!("Deleted shortcut with hash {hash}");
@@ -117,21 +140,16 @@ pub async fn delete_shortcut(
     }
 }
 
-pub async fn clear_shortcuts(
-    State((client, table_name, _)): State<(Client, String, SocketAddr)>,
+pub async fn index(
+    State((_client, _table_name, _, _)): State<(Client, String, SocketAddr, String)>,
 ) -> impl IntoResponse {
-    match db::clear_shortcuts(&client, &table_name).await {
-        Ok(_) => {
-            tracing::info!("Cleared shortcuts");
-            StatusCode::OK.into_response()
-        }
+    let template = IndexTemplate { url: "/".to_string() };
+
+    match template.render() {
+        Ok(reply_html) => (StatusCode::OK, Html(reply_html).into_response()).into_response(),
         Err(e) => {
-            tracing::error!("Could not clear shortcuts: {e:?}");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Could not clear shortcuts",
-            )
-                .into_response()
+            tracing::error!("Could not render template: {e:?}");
+            (StatusCode::INTERNAL_SERVER_ERROR, "Could not render template").into_response()
         }
     }
 }

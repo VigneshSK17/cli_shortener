@@ -17,6 +17,10 @@ pub struct ClapArgs {
     /// Set the specific host IP addr
     #[clap(long, default_value = "127.0.0.1")]
     pub host: String,
+
+    /// Set the pathname for the server
+    #[clap(long, default_value = "")]
+    pub path: String
 }
 
 #[derive(Debug, Subcommand)]
@@ -27,8 +31,6 @@ pub enum EntityType {
     /// Delete a shortened link
     Delete(DeleteCommand),
 
-    /// Deletes all existing shortened links
-    Clear,
     /// Lists all active shortened links
     List,
     /// Starts the web server which redirects the shortened links

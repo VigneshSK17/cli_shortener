@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+
+{% block title %}CLI Shortener{% endblock %}
+
+{% block content %}
+
+    <section class="hero">
+        <div class="hero-body">
+            <div class="container has-text-centered">
+                <h1 class="title">CLI Shortener, but Web!</h1>
+            </div>
+        </div>
+    </section>
+
+    <section class="section">
+        <h2 class="title">Modify Link</h2>
+        <div class="field">
+            <label class="label">Link</label>
+            <div class="control">
+                <input type="text" class="input" id="shortcut-input" placeholder="https://www.google.com">
+            </div>
+            <p class="help">Note: If deleting shortcut, input shortcut link not the original</p>
+        </div>
+
+        <article class="notification is-light" id="submit-notification" style="display: none;">
+        </article>
+
+        <div class="field is-grouped">
+            <div class="control">
+              <button class="button is-link" onclick="create()">Create Shortcut</button>
+            </div>
+            <div class="control">
+              <button class="js-modal-trigger button is-link is-danger is-light" data-target="modal-confirm-delete">Delete Shortcut</button>
+            </div>
+        </div>
+
+    </section>
+    <script>
+
+        let input = document.getElementById('shortcut-input');
+        let notif = document.getElementById('submit-notification');
+        let del_button = notif.childNodes[0];
+
+        const set_notif = (is_success = true) => {
+            if (is_success) {
+                notif.classList.add("is-success");
+                notif.classList.remove("is-danger");
+            } else {
+                notif.classList.remove("is-success");
+                notif.classList.add("is-danger");
+            }
+            notif.style.display = "block";
+            input.value = "";
+        }
+
+        const create = async (event) => {
+            let link_dict = {"link": input.value};
+
+            const response = await fetch(window.location.pathname, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(link_dict)
+            });
+
+            if (response.status != 200) {
+                notif.textContent = await response.text();
+                set_notif(false);
+            } else {
+                notif.textContent = "";
+
+                const span_text = document.createElement("span");
+                const span_link = document.createElement("span");
+                const link = document.createElement("a");
+
+                span_text.textContent = "Shortcut created! ";
+
+                const hash = (await response.text()).split("/").at(-1).trim();
+                const window_location = window.location.origin + window.location.pathname;
+                link.setAttribute("href", `${window_location}/${hash}`);
+                link.textContent = `${window_location}/${hash}`;
+
+                span_link.appendChild(link);
+                notif.appendChild(span_text);
+                notif.appendChild(span_link);
+
+                set_notif();
+            }
+        }
+
+        document.addEventListener("DOMContentLoaded", () => {
+            function openModal($el) {
+                $el.classList.add("is-active");
+            }
+
+            function closeModal($el) {
+                $el.classList.remove("is-active")
+            }
+
+            (document.querySelectorAll('.js-modal-trigger') || []).forEach(($trigger) => {
+              const modal = $trigger.dataset.target;
+              const $target = document.getElementById(modal);
+
+              $trigger.addEventListener('click', () => {
+                if (input.value.trim() === "") {
+                    notif.textContent = "Empty URL provided as shortcut";
+                    set_notif(false);
+                } else {
+                    openModal($target);
+                }
+
+              });
+            });
+
+            (document.querySelectorAll('#cancel .modal-background, .modal-close, .modal-card-head .delete, .modal-card-foot') || []).forEach(($close) => {
+                const $target = $close.closest('.modal');
+
+                $close.addEventListener('click', () => {
+                  closeModal($target);
+                });
+            });
+
+            (document.querySelectorAll('#confirm') || []).forEach(($close) => {
+                const $target = $close.closest('.modal');
+
+                $close.addEventListener('click', async () => {
+                  closeModal($target);
+                  await remove();
+                });
+            });
+        });
+        const remove = async (event) => {
+            let hash = input.value.split('/').at(-1).trim();
+
+            const response = await fetch(window.location.pathname + "/" + hash, {
+                method: "DELETE"
+            });
+
+            if (response.status != 204) {
+                notif.textContent = await response.text();
+                set_notif(false);
+            } else {
+                notif.textContent = `Shortcut deleted!`;
+                set_notif(true);
+            }
+        }
+
+    </script>
+
+    <div id="modal-confirm-delete" class="modal">
+        <div class="modal-background"></div>
+        <div class="modal-card">
+            <header class="modal-card-head">
+                <p class="modal-card-title">Are you sure you want to delete this shortcut?</p>
+            </header>
+
+            <footer class="modal-card-foot">
+                <div class="buttons">
+                    <button id="confirm" class="button is-danger">Yes</button>
+                    <button id="cancel" class="button" aria-label="close">No</button>
+                </div>
+            </footer>
+
+            <button class="modal-close is-large" aria-label="close"></button>
+        </div>
+
+    </div>
+
+
+{% endblock %}

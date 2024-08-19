@@ -6,7 +6,7 @@ use std::{
 };
 
 use args::ClapArgs;
-use axum::{response::IntoResponse, routing};
+use axum::routing;
 use clap::Parser;
 use cli_table::{print_stdout, Cell, CellStruct, Style, Table};
 use dotenv::dotenv;
@@ -21,7 +21,7 @@ mod utils;
 async fn main() {
     let args = args::ClapArgs::parse();
 
-    let local_addr = match matches!(args.entity_type, args::EntityType::Start) {
+    let (local_addr, path) = match matches!(args.entity_type, args::EntityType::Start) {
         false => match get_local_addr() {
             Ok(addr) => addr,
             Err(_) => {
@@ -29,26 +29,15 @@ async fn main() {
                 return;
             }
         },
-        true => SocketAddr::from(([127, 0, 0, 1], 0)), // just to initialize the variable
+        true => (SocketAddr::from(([127, 0, 0, 1], 0)), "".to_string()), // just to initialize the variable
     };
 
     match args.entity_type {
-        args::EntityType::Clear => {
-            match reqwest::get(format!("http://{local_addr}/s/clear")).await {
-                Err(_) => println!("\nThe links server has not been started. Use the start command to start the server"),
-                Ok(resp) => {
-                    match resp.status() {
-                        StatusCode::OK => println!("\nCleared links"),
-                        _ => println!("\nCould not clear links")
-                    }
-                }
-            }
-        }
         args::EntityType::Start => {
             init(args).await;
         }
         args::EntityType::List => {
-            if let Ok(resp) = reqwest::get(format!("http://{local_addr}/s/all")).await {
+            if let Ok(resp) = reqwest::get(format!("http://{local_addr}/{path}/all")).await {
                 if resp.status() == StatusCode::OK {
                     if let Ok(shortcuts) = resp.json::<Vec<db::Shortcut>>().await {
                         if !shortcuts.is_empty() {
@@ -85,7 +74,7 @@ async fn main() {
             };
 
             if utils::is_url(&create_link.link) {
-                match client.post(format!("http://{local_addr}/s"))
+                match client.post(format!("http://{local_addr}/{path}"))
                     .json(&create_link)
                     .send().await {
                     Err(_) => println!("\nThe links server has not been started. Use the start command to start the server"),
@@ -109,7 +98,12 @@ async fn main() {
             let client = reqwest::Client::new();
             let hash = delete_command.link.split('/').last().unwrap();
 
-            match client.delete(format!("http://{local_addr}/s/{hash}"))
+            let parent_path= match path.as_str() {
+                "" => "".to_string(),
+                p => format!("{p}/")
+            };
+
+            match client.delete(format!("http://{local_addr}/{parent_path}{hash}"))
                 .send().await {
                 Err(_) => println!("\nThe links server has not been started. Use the start command to start the server"),
                 Ok(resp) => {
@@ -137,16 +131,21 @@ pub async fn init(args: ClapArgs) {
         .compact()
         .init();
 
-    let addr = gen_addr(args);
+    let addr = gen_addr(&args);
+    let path = args.path.as_str();
+    let parent_path= match args.path.as_str() {
+        "" => "".to_string(),
+        p => format!("{p}/")
+    };
+
 
     let app = axum::Router::new()
-        .route("/", routing::get(test))
-        .route("/", routing::post(controller::create_new_shortcut))
-        .route("/all", routing::get(controller::get_all_shortcuts))
-        .route("/clear", routing::get(controller::clear_shortcuts))
-        .route("/:hash", routing::get(controller::open_shortcut))
-        .route("/:hash", routing::delete(controller::delete_shortcut))
-        .with_state((db_client, db_table_name, addr));
+        .route(&format!("/{path}"), routing::get(controller::index))
+        .route(&format!("/{path}"), routing::post(controller::create_new_shortcut))
+        .route(&format!("/{parent_path}all"), routing::get(controller::get_all_shortcuts))
+        .route(&format!("/{parent_path}:hash"), routing::get(controller::open_shortcut))
+        .route(&format!("/{parent_path}:hash"), routing::delete(controller::delete_shortcut))
+        .with_state((db_client, db_table_name, addr, path.to_string()));
 
     let binding = axum::Server::try_bind(&addr);
 
@@ -156,9 +155,9 @@ pub async fn init(args: ClapArgs) {
             let server = b.serve(app.into_make_service());
             let local_addr = server.local_addr();
 
-            tracing::info!("Started on: http://{local_addr}");
+            tracing::info!("Started on: http://{local_addr}/{path}");
 
-            if store_local_addr(&local_addr).is_err() {
+            if store_local_addr(&local_addr, &args.path).is_err() {
                 tracing::error!("Could not store local address of server");
             }
 
@@ -169,11 +168,7 @@ pub async fn init(args: ClapArgs) {
     }
 }
 
-async fn test() -> impl IntoResponse {
-    "Welcome to cli-shortener!"
-}
-
-fn gen_addr(args: ClapArgs) -> SocketAddr {
+fn gen_addr(args: &ClapArgs) -> SocketAddr {
     let mut addr = SocketAddr::from((
         args.host
             .parse::<IpAddr>()
@@ -195,13 +190,13 @@ fn gen_addr(args: ClapArgs) -> SocketAddr {
     addr
 }
 
-fn store_local_addr(addr: &SocketAddr) -> Result<(), std::io::Error> {
+fn store_local_addr(addr: &SocketAddr, path: &str) -> Result<(), std::io::Error> {
     let mut file = File::create("/tmp/cli_shortener.txt")?;
-    file.write_all(format!("{}\n{}", &addr.ip(), &addr.port()).as_bytes())?;
+    file.write_all(format!("{}\n{}\n{}", &addr.ip(), &addr.port(), &path).as_bytes())?;
     Ok(())
 }
 
-fn get_local_addr() -> Result<SocketAddr, std::io::Error> {
+fn get_local_addr() -> Result<(SocketAddr, String), std::io::Error> {
     let mut file = File::open("/tmp/cli_shortener.txt")?;
     let mut contents = String::new();
     file.read_to_string(&mut contents)?;
@@ -213,6 +208,10 @@ fn get_local_addr() -> Result<SocketAddr, std::io::Error> {
     let port = values[1]
         .parse::<u16>()
         .map_err(|_| std::io::Error::last_os_error())?;
+    let path = values[2]
+        .parse::<String>()
+        .map_err(|_| std::io::Error::last_os_error())?;
 
-    Ok(SocketAddr::from((host, port)))
+
+    Ok((SocketAddr::from((host, port)), path))
 }

@@ -154,26 +154,11 @@ pub async fn delete_shortcut(client: &Client, table_name: &str, hash: &str) -> R
     Ok(())
 }
 
-/// Clears all shortcuts from db
-pub async fn clear_shortcuts(client: &Client, table_name: &str) -> Result<(), DbError> {
-    let request = client.delete_table().table_name(table_name);
-
-    tracing::debug!("Executing request [{request:?}] to get shortcut from db using hash");
-
-    let response = request.send().await;
-    match response {
-        Ok(_) => {
-            tracing::debug!("Cleared {table_name}");
-            Ok(())
-        }
-        Err(e) => Err(DbError::RequestError(e.to_string())),
-    }
-}
 
 #[cfg(test)]
 #[tokio::test]
 async fn test_init_db() -> Result<(), aws_sdk_dynamodb::Error> {
-    dotenv().ok();
+    dotenv::dotenv().ok();
     let client = init_db_client().await;
     let resp = client.list_tables().send().await?;
 
@@ -184,7 +169,7 @@ async fn test_init_db() -> Result<(), aws_sdk_dynamodb::Error> {
 
 #[tokio::test]
 async fn test_add_to_db() -> Result<(), DbError> {
-    dotenv().ok();
+    dotenv::dotenv().ok();
     let client = init_db_client().await;
     let table_name = std::env::var("AWS_TABLE_NAME").unwrap();
 
