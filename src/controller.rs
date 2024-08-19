@@ -14,12 +14,12 @@ use crate::{
 };
 
 pub async fn open_shortcut(
-    State((client, table_name, address)): State<(Client, String, SocketAddr)>,
+    State((client, table_name, address, path)): State<(Client, String, SocketAddr, String)>,
     Path(hash): Path<String>,
 ) -> impl IntoResponse {
     match db::get_shortcut(&client, &table_name, &hash).await {
         Ok(link) => {
-            tracing::info!("Redirected http://{address}/{hash} to {link}");
+            tracing::info!("Redirected http://{address}/{path}/{hash} to {link}");
             Redirect::temporary(&link).into_response()
         }
         Err(e) => {
@@ -34,7 +34,7 @@ pub async fn open_shortcut(
 }
 
 pub async fn create_new_shortcut(
-    State((client, table_name, address)): State<(Client, String, SocketAddr)>,
+    State((client, table_name, address, path)): State<(Client, String, SocketAddr, String)>,
     extract::Json(create_link): extract::Json<utils::CreateLink>,
 ) -> impl IntoResponse {
 
@@ -56,8 +56,8 @@ pub async fn create_new_shortcut(
 
     match db::add_shortcut(&client, &table_name, &shortcut).await {
         Ok(_) => {
-            tracing::info!("Created shortcut http://{address}/{}", shortcut.hash);
-            format!("http://{address}/{}", shortcut.hash).into_response()
+            tracing::info!("Created shortcut http://{address}/{path}/{}", shortcut.hash);
+            format!("http://{address}/{path}/{}", shortcut.hash).into_response()
         }
         Err(e) => {
             tracing::error!(
@@ -75,7 +75,7 @@ pub async fn create_new_shortcut(
 }
 
 pub async fn get_all_shortcuts(
-    State((client, table_name, _)): State<(Client, String, SocketAddr)>,
+    State((client, table_name, _, _)): State<(Client, String, SocketAddr, String)>,
 ) -> impl IntoResponse {
     match db::get_all_shortcuts(&client, &table_name).await {
         Ok(items) => {
@@ -111,7 +111,7 @@ pub async fn get_all_shortcuts(
 }
 
 pub async fn delete_shortcut(
-    State((client, table_name, _)): State<(Client, String, SocketAddr)>,
+    State((client, table_name, _, _)): State<(Client, String, SocketAddr, String)>,
     Path(hash): Path<String>,
 ) -> impl IntoResponse {
 
@@ -141,7 +141,7 @@ pub async fn delete_shortcut(
 }
 
 pub async fn index(
-    State((_client, _table_name, _)): State<(Client, String, SocketAddr)>,
+    State((_client, _table_name, _, _)): State<(Client, String, SocketAddr, String)>,
 ) -> impl IntoResponse {
     let template = IndexTemplate { url: "/".to_string() };
 

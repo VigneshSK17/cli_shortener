@@ -56,7 +56,6 @@
         const create = async (event) => {
             let link_dict = {"link": input.value};
 
-            // TODO: Fix fetch to include pathname
             const response = await fetch(window.location.pathname, {
                 method: "POST",
                 headers: {
@@ -69,7 +68,6 @@
                 notif.textContent = await response.text();
                 set_notif(false);
             } else {
-                // TODO: (Check this) Modify text to display correct link when deployed
                 notif.textContent = "";
 
                 const span_text = document.createElement("span");
@@ -80,8 +78,8 @@
 
                 const hash = (await response.text()).split("/").at(-1).trim();
                 const window_location = window.location.origin + window.location.pathname;
-                link.setAttribute("href", `${window_location}${hash}`);
-                link.textContent = `${window_location}${hash}`;
+                link.setAttribute("href", `${window_location}/${hash}`);
+                link.textContent = `${window_location}/${hash}`;
 
                 span_link.appendChild(link);
                 notif.appendChild(span_text);
@@ -135,7 +133,7 @@
         const remove = async (event) => {
             let hash = input.value.split('/').at(-1).trim();
 
-            const response = await fetch(window.location.pathname + hash, {
+            const response = await fetch(window.location.pathname + "/" + hash, {
                 method: "DELETE"
             });
 
